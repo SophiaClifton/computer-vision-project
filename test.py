@@ -87,12 +87,19 @@ if cv2.cuda.getCudaEnabledDeviceCount() > 0:
     
     style_transfer_model_2.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
     style_transfer_model_2.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
-else:
-    print("CUDA not available. Running on CPU.")
 
+    providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+
+elif ort.get_device() == "ROCM":  # ROCm support for AMD GPUs (Linux)
+    print("CUDA not available, but ROCm (AMD GPU) is available.")
+    providers = ['ROCMExecutionProvider', 'CPUExecutionProvider']
+
+else:
+    print("No GPU acceleration available. Running on CPU.")
+    providers = ['CPUExecutionProvider']
 
 # Load the MiDaS depth estimation model using ONNX Runtime
-depth_session = ort.InferenceSession(depth_model_path)
+depth_session = ort.InferenceSession(depth_model_path, providers=providers)
 
 # Access webcam
 cap = cv2.VideoCapture(0)
