@@ -16,6 +16,11 @@ This repository contains code for live video NST and depth mapping at adjustable
 (on Linux)
 
 ### Clone the Repository
+1. Download .zip file and extract
+2. cd to extracted folder
+
+OR
+
 ```sh
 git clone https://github.com/SophiaClifton/computer-vision-project.git
 cd computer-vision-project
