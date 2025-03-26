@@ -64,11 +64,12 @@ style_model_url_2 = "https://cs.stanford.edu/people/jcjohns/fast-neural-style/mo
 style_model_path_1 = "mosaic.t7"
 style_model_path_2 = "udnie.t7" 
 
-depth_model_url = "https://huggingface.co/julienkay/sentis-MiDaS/blob/main/onnx/midas_v21_small_256.onnx"
-depth_model_path = "midas.onnx"
+# MiDaS model for depth estimation
+depth_model_url = "https://huggingface.co/julienkay/sentis-MiDaS/blob/main/onnx/midas_v21_small_256.onnx" # download path doesn't work anymore
+depth_model_path = "midas.onnx" 
 
-# Download models if not already present
-for url, path in [(style_model_url_1, style_model_path_1), (style_model_url_2, style_model_path_2), (depth_model_url, depth_model_path)]:
+# Download NST models if not already present
+for url, path in [(style_model_url_1, style_model_path_1), (style_model_url_2, style_model_path_2)]:
     if not os.path.exists(path):
         print(f"Downloading {path}...")
         urllib.request.urlretrieve(url, path)
