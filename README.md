@@ -15,13 +15,14 @@ This repository contains code for live video NST and depth mapping at adjustable
 ## Installation and Usage
 
 ### Clone the Repository
+clone repo
 ```sh
-will be added later
+cd computer-vision-project
 ```
 
 ### Install Dependencies  
 ```sh
-will be added later
+pip install -r requirements.txt
 ```
 
 ### Running Tests  
