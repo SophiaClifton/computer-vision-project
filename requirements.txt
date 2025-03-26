@@ -1,0 +1,6 @@
+Flask==3.1.0
+numpy==2.2.3
+onnxruntime==1.21.0
+onnxruntime_gpu==1.21.0
+opencv_python==4.11.0.86
+opencv_python_headless==4.11.0.86

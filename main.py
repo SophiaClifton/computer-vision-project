@@ -77,7 +77,7 @@ style_model_path_2 = "udnie.t7"
 depth_model_url = "https://huggingface.co/julienkay/sentis-MiDaS/blob/main/onnx/midas_v21_small_256.onnx" # download path doesn't work anymore
 depth_model_path = "midas.onnx"
 
-# Download models if not already
+# Download NST models if not already
 for url, path in [(style_model_url_1, style_model_path_1), (style_model_url_2, style_model_path_2)]:
     if not os.path.exists(path):
         print(f"Downloading {path}...")
