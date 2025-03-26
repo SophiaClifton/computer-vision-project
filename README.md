@@ -13,6 +13,7 @@ This repository contains code for live video NST and depth mapping at adjustable
 - **`demo/app.py`**: A user-friendly interface to adjust and generate NST & DM video feedback with dynamic resolution changes.
 
 ## Installation and Usage
+(on Linux)
 
 ### Clone the Repository
 ```sh
