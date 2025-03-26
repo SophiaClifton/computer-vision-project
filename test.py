@@ -78,6 +78,19 @@ for url, path in [(style_model_url_1, style_model_path_1), (style_model_url_2, s
 style_transfer_model_1 = cv2.dnn.readNetFromTorch(style_model_path_2)
 style_transfer_model_2 = cv2.dnn.readNetFromTorch(style_model_path_1)
 
+
+# Check if CUDA is available and enable it if it is
+if cv2.cuda.getCudaEnabledDeviceCount() > 0:
+    print("CUDA is available! Running on GPU...")
+    style_transfer_model_1.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+    style_transfer_model_1.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+    
+    style_transfer_model_2.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+    style_transfer_model_2.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+else:
+    print("CUDA not available. Running on CPU.")
+
+
 # Load the MiDaS depth estimation model using ONNX Runtime
 depth_session = ort.InferenceSession(depth_model_path)
 
