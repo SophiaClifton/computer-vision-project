@@ -23,6 +23,7 @@ def apply_artsyle_close(frame, h, w, style_transfer_model):
     stylized_output_close[2] += 123.680
     stylized_output_close = stylized_output_close.transpose(1, 2, 0)
     stylized_output_close = np.clip(stylized_output_close, 0, 255).astype(np.uint8)
+    #return cv2.resize(stylized_output_close, (w, h)) use this instead if using //2 for lower res
     return stylized_output_close
 
 # Function to apply artistic style to far objects
