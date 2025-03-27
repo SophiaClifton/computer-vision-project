@@ -6,7 +6,6 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
-# To optimize performance, "low" resolution NST -> divide h and w by // 2
 
 # Adjust N for better video feedback:
 # - A higher N at high resolution improves speedy playback significantly.
@@ -29,9 +28,9 @@ def high_apply_artsyle_close(frame, h, w, style_transfer_model):
     return stylized_output_close
 
 
-# Function to apply artistic style to close objects opting for low resolution output
+# Function to apply artistic style to close objects and resizes frame for faster computation
 def low_apply_artsyle_close(frame, h, w, style_transfer_model):
-    small_frame = cv2.resize(frame, (w, h // 2))  # Resize for faster inference
+    small_frame = cv2.resize(frame, (w, h // 2))
     inp_close = cv2.dnn.blobFromImage(
         small_frame,
         1.0,
@@ -67,9 +66,9 @@ def high_apply_artsyle_far(frame, h, w, style_transfer_model):
     return stylized_output_far
 
 
-# Function to apply artistic style to far objects opting for low resolution output
+# Function to apply artistic style to far objects and resizes frame for faster computation
 def low_apply_artsyle_far(frame, h, w, style_transfer_model):
-    small_frame = cv2.resize(frame, (w // 2, h // 2))  # Resize for faster inference
+    small_frame = cv2.resize(frame, (w // 2, h // 2))
     inp_far = cv2.dnn.blobFromImage(
         small_frame,
         1.0,
@@ -117,7 +116,7 @@ depth_model_url = "https://huggingface.co/julienkay/sentis-MiDaS/blob/main/onnx/
 depth_model_path = "midas.onnx"
 
 
-# Main generate function
+# Generates video feedback using user specified resolution and fps
 def generate(N, foreground, background):
     # Download NST models if not already present
     for url, path in [
@@ -127,11 +126,11 @@ def generate(N, foreground, background):
         if not os.path.exists(path):
             urllib.request.urlretrieve(url, path)
 
-    # Load the style transfer models using OpenCV
+    # Load NST models using OpenCV
     style_transfer_model_1 = cv2.dnn.readNetFromTorch(style_model_path_2)
     style_transfer_model_2 = cv2.dnn.readNetFromTorch(style_model_path_1)
 
-    # Check if CUDA is available and enable it if it is
+    # GPU optimization options for NVDIA GPU and AMD RADEON GPU
     if cv2.cuda.getCudaEnabledDeviceCount() > 0:
         print("CUDA is available! Running on GPU...")
         style_transfer_model_1.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
@@ -142,7 +141,7 @@ def generate(N, foreground, background):
 
         providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
 
-    elif ort.get_device() == "ROCM":  # ROCm support for AMD GPUs (Linux)
+    elif ort.get_device() == "ROCM":
         print("CUDA not available, but ROCm (AMD GPU) is available.")
         providers = ["ROCMExecutionProvider", "CPUExecutionProvider"]
 
@@ -182,10 +181,10 @@ def generate(N, foreground, background):
         depth_map = get_depth_map(frame, depth_session, h, w)
 
         # Create masks for close and far regions
-        close_mask = depth_map >= 127  # Closer objects have lower depth values
-        far_mask = depth_map < 127  # Farther objects have higher depth values
+        close_mask = depth_map >= 127  # Closer objects have higher depth values
+        far_mask = depth_map < 127  # Farther objects have lower depth values
 
-        # Apply style transfer for close objects -> 1st style model
+        # Apply style transfer for close objects using 1st style model
         if foreground == "high":
             stylized_output_close = high_apply_artsyle_close(
                 frame, h, w, style_transfer_model_1
@@ -195,7 +194,7 @@ def generate(N, foreground, background):
                 frame, h, w, style_transfer_model_1
             )
 
-        # Apply style transfer for far objects -> 2nd style model
+        # Apply style transfer for far objects using 2nd style model
         if background == "high":
             stylized_output_far = high_apply_artsyle_far(
                 frame, h, w, style_transfer_model_2
@@ -207,8 +206,8 @@ def generate(N, foreground, background):
 
         # Blend the results based on depth regions
         final_output = np.zeros_like(frame)
-        final_output[close_mask] = stylized_output_close[close_mask]  # Close objects
-        final_output[far_mask] = stylized_output_far[far_mask]  # Far objects
+        final_output[close_mask] = stylized_output_close[close_mask]  # Far mask applied to style 1 output
+        final_output[far_mask] = stylized_output_far[far_mask]  # Far mask applied to style 2 output
 
         if prev_frame is not None and prev_stylized is not None:
             # Convert previous and current frames to grayscale

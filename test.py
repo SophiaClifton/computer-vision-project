@@ -92,6 +92,8 @@ for url, path in [
 
 # Load the style transfer models using OpenCV
 # Note: The order is swapped as in your original test.py
+# yea the og version had reversed depths, so fixing that reversed the applcation of style models on frame
+# didnt wanna rename all models so i just switched them here lul
 style_transfer_model_1 = cv2.dnn.readNetFromTorch(style_model_path_2)
 style_transfer_model_2 = cv2.dnn.readNetFromTorch(style_model_path_1)
 
