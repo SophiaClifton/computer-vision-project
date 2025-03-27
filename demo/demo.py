@@ -3,7 +3,6 @@ import numpy as np
 import urllib.request
 import os
 import onnxruntime as ort
-import sys
 
 # To optimize performance, "low" resolution NST -> divide h and w by // 2 
 
@@ -94,99 +93,93 @@ style_model_path_2 = "udnie.t7"
 depth_model_url = "https://huggingface.co/julienkay/sentis-MiDaS/blob/main/onnx/midas_v21_small_256.onnx" # download path doesn't work anymore
 depth_model_path = "midas.onnx"
 
-# ARGS received from user input
-if len(sys.argv) != 4:
-    print("Usage: script.py <n: 1-5> <foreground: high/low> <background: high/low>")
-    sys.exit(1)
-
-N = int(sys.argv[1])
-foreground = sys.argv[2].lower()
-background = sys.argv[3].lower()
+# Main generate function
+def generate(N, foreground, background):
     
-# Download NST models if not already present
-for url, path in [(style_model_url_1, style_model_path_1), (style_model_url_2, style_model_path_2)]:
-    if not os.path.exists(path):
-        urllib.request.urlretrieve(url, path)
+    # Download NST models if not already present
+    for url, path in [(style_model_url_1, style_model_path_1), (style_model_url_2, style_model_path_2)]:
+        if not os.path.exists(path):
+            urllib.request.urlretrieve(url, path)
 
-# Load the style transfer models using OpenCV
-style_transfer_model_1 = cv2.dnn.readNetFromTorch(style_model_path_2)
-style_transfer_model_2 = cv2.dnn.readNetFromTorch(style_model_path_1)
+    # Load the style transfer models using OpenCV
+    style_transfer_model_1 = cv2.dnn.readNetFromTorch(style_model_path_2)
+    style_transfer_model_2 = cv2.dnn.readNetFromTorch(style_model_path_1)
 
 
-# Check if CUDA is available and enable it if it is
-if cv2.cuda.getCudaEnabledDeviceCount() > 0:
-    print("CUDA is available! Running on GPU...")
-    style_transfer_model_1.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
-    style_transfer_model_1.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
-    
-    style_transfer_model_2.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
-    style_transfer_model_2.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+    # Check if CUDA is available and enable it if it is
+    if cv2.cuda.getCudaEnabledDeviceCount() > 0:
+        print("CUDA is available! Running on GPU...")
+        style_transfer_model_1.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+        style_transfer_model_1.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+        
+        style_transfer_model_2.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+        style_transfer_model_2.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
 
-    providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+        providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
 
-elif ort.get_device() == "ROCM":  # ROCm support for AMD GPUs (Linux)
-    print("CUDA not available, but ROCm (AMD GPU) is available.")
-    providers = ['ROCMExecutionProvider', 'CPUExecutionProvider']
+    elif ort.get_device() == "ROCM":  # ROCm support for AMD GPUs (Linux)
+        print("CUDA not available, but ROCm (AMD GPU) is available.")
+        providers = ['ROCMExecutionProvider', 'CPUExecutionProvider']
 
-else:
-    print("No GPU acceleration available. Running on CPU.")
-    providers = ['CPUExecutionProvider']
-
-# Load the MiDaS depth estimation model using ONNX Runtime
-depth_session = ort.InferenceSession(depth_model_path, providers=providers)
-
-# Access webcam
-cap = cv2.VideoCapture(0)
-
-if not cap.isOpened():
-    print("Error: Could not open webcam.")
-    exit()
-
-frame_count = 0
-# N = 5  # Apply every N frames, N=2 slower but better fps, N=5 choppier but real-time -> can only tell diff at higher res img
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        print("Error: Couldn't read frame.")
-        break
-    
-    frame_count += 1
-    if frame_count % N != 0:  # Skip N-1 frames for performance
-        continue
-    
-    h, w, _ = frame.shape
-    
-    # Get the depth map for the frame
-    depth_map = get_depth_map(frame, depth_session, h, w)
-    
-    # Create masks for close and far regions
-    close_mask = depth_map >= 127  # Closer objects have lower depth values
-    far_mask = depth_map < 127  # Farther objects have higher depth values
-    
-    # Apply style transfer for close objects -> 1st style model
-    if(foreground == "high"):
-        stylized_output_close = high_apply_artsyle_close(frame, h, w, style_transfer_model_1)
     else:
-        stylized_output_close = low_apply_artsyle_close(frame, h, w, style_transfer_model_1)
+        print("No GPU acceleration available. Running on CPU.")
+        providers = ['CPUExecutionProvider']
+
+    # Load the MiDaS depth estimation model using ONNX Runtime
+    depth_session = ort.InferenceSession(depth_model_path, providers=providers)
+
+    # Access webcam
+    cap = cv2.VideoCapture(0)
+
+    if not cap.isOpened():
+        print("Error: Could not open webcam.")
+        exit()
+
+    frame_count = 0
+    # N = 5  # Apply every N frames, N=2 slower but better fps, N=5 choppier but real-time -> can only tell diff at higher res img
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            print("Error: Couldn't read frame.")
+            break
+        
+        frame_count += 1
+        if frame_count % N != 0:  # Skip N-1 frames for performance
+            continue
+        
+        h, w, _ = frame.shape
+        
+        # Get the depth map for the frame
+        depth_map = get_depth_map(frame, depth_session, h, w)
+        
+        # Create masks for close and far regions
+        close_mask = depth_map >= 127  # Closer objects have lower depth values
+        far_mask = depth_map < 127  # Farther objects have higher depth values
+        
+        # Apply style transfer for close objects -> 1st style model
+        if(foreground == "high"):
+            stylized_output_close = high_apply_artsyle_close(frame, h, w, style_transfer_model_1)
+        else:
+            stylized_output_close = low_apply_artsyle_close(frame, h, w, style_transfer_model_1)
 
 
-    # Apply style transfer for far objects -> 2nd style model
-    if(background == "high"):
-        stylized_output_far = high_apply_artsyle_far(frame, h, w, style_transfer_model_2)
-    else:
-        stylized_output_far = low_apply_artsyle_far(frame, h, w, style_transfer_model_2)
+        # Apply style transfer for far objects -> 2nd style model
+        if(background == "high"):
+            stylized_output_far = high_apply_artsyle_far(frame, h, w, style_transfer_model_2)
+        else:
+            stylized_output_far = low_apply_artsyle_far(frame, h, w, style_transfer_model_2)
 
-    # Blend the results based on depth regions
-    final_output = np.zeros_like(frame)
-    final_output[close_mask] = stylized_output_close[close_mask]  # Close objects
-    final_output[far_mask] = stylized_output_far[far_mask]  # Far objects
-    
-    # Display the final output
-    cv2.imshow("Artistic Depth Feedback", final_output)
-    
-    if cv2.waitKey(1) & 0xFF == ord('q'):  # Press "q" to exit video
-        break
+        # Blend the results based on depth regions
+        final_output = np.zeros_like(frame)
+        final_output[close_mask] = stylized_output_close[close_mask]  # Close objects
+        final_output[far_mask] = stylized_output_far[far_mask]  # Far objects
+        
+        # Display the final output
+        cv2.imshow("Artistic Depth Feedback", final_output)
+        
+        if cv2.waitKey(1) & 0xFF == ord('q'):  # Press "q" to exit video
+            break
 
-cap.release()
-cv2.destroyAllWindows()
+    cap.release()
+    cv2.destroyAllWindows()
 

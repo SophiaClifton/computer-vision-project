@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, request
-import subprocess
+import demo 
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 
@@ -16,22 +16,8 @@ def generate():
         background = data.get("background")
         N = data.get("frames")
         
-        # Run demo.py with the extracted values as args
-        result = subprocess.run(
-            ["python3", "demo.py", N, foreground, background],
-            capture_output=True,
-            text=True
-        )
-
-        # Capture both stdout and stderr
-        output = result.stdout
-        error = result.stderr
-
-        # Return the output and error as part of the response -> remove if we don't want annoying pop up at end
-        if result.returncode == 0:
-            return jsonify({"output": output})
-        else:
-            return jsonify({"error": error}), 500
+        # Call demo.py generate func
+        output = demo.generate(int(N), foreground, background) 
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
