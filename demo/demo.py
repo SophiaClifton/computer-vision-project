@@ -13,25 +13,25 @@ import onnxruntime as ort
 
 
 # Function to apply artistic style to close objects ensuring high resolution
-def high_apply_artsyle_close(frame, h, w, style_transfer_model):
-    inp_close = cv2.dnn.blobFromImage(
+def high_apply_artsyle(frame, h, w, style_transfer_model):
+    inp = cv2.dnn.blobFromImage(
         frame, 1.0, (w, h), (103.939, 116.779, 123.680), swapRB=False, crop=False
     )
-    style_transfer_model.setInput(inp_close)
-    stylized_output_close = style_transfer_model.forward()
-    stylized_output_close = stylized_output_close.reshape(3, h, w)
-    stylized_output_close[0] += 103.939
-    stylized_output_close[1] += 116.779
-    stylized_output_close[2] += 123.680
-    stylized_output_close = stylized_output_close.transpose(1, 2, 0)
-    stylized_output_close = np.clip(stylized_output_close, 0, 255).astype(np.uint8)
-    return stylized_output_close
+    style_transfer_model.setInput(inp)
+    stylized_output = style_transfer_model.forward()
+    stylized_output = stylized_output.reshape(3, h, w)
+    stylized_output[0] += 103.939
+    stylized_output[1] += 116.779
+    stylized_output[2] += 123.680
+    stylized_output = stylized_output.transpose(1, 2, 0)
+    stylized_output = np.clip(stylized_output, 0, 255).astype(np.uint8)
+    return stylized_output
 
 
 # Function to apply artistic style to close objects and resizes frame for faster computation
-def low_apply_artsyle_close(frame, h, w, style_transfer_model):
+def low_apply_artsyle(frame, h, w, style_transfer_model):
     small_frame = cv2.resize(frame, (w, h // 2))
-    inp_close = cv2.dnn.blobFromImage(
+    inp = cv2.dnn.blobFromImage(
         small_frame,
         1.0,
         (w // 2, h // 2),
@@ -39,35 +39,15 @@ def low_apply_artsyle_close(frame, h, w, style_transfer_model):
         swapRB=False,
         crop=False,
     )
-    style_transfer_model.setInput(inp_close)
-    stylized_output_close = style_transfer_model.forward()
-    stylized_output_close = stylized_output_close.reshape(3, h // 2, w // 2)
-    stylized_output_close[0] += 103.939
-    stylized_output_close[1] += 116.779
-    stylized_output_close[2] += 123.680
-    stylized_output_close = stylized_output_close.transpose(1, 2, 0)
-    stylized_output_close = np.clip(stylized_output_close, 0, 255).astype(np.uint8)
-    return cv2.resize(stylized_output_close, (w, h))
-
-
-# Function to apply artistic style to far objects ensuring high resolution
-def high_apply_artsyle_far(frame, h, w, style_transfer_model):
-    inp_far = cv2.dnn.blobFromImage(
-        frame, 1.0, (w, h), (103.939, 116.779, 123.680), swapRB=False, crop=False
-    )
-    style_transfer_model.setInput(inp_far)
-    stylized_output_far = style_transfer_model.forward()
-    stylized_output_far = stylized_output_far.reshape(3, h, w)
-    stylized_output_far[0] += 103.939
-    stylized_output_far[1] += 116.779
-    stylized_output_far[2] += 123.680
-    stylized_output_far = stylized_output_far.transpose(1, 2, 0)
-    stylized_output_far = np.clip(stylized_output_far, 0, 255).astype(np.uint8)
-    return stylized_output_far
-
-
-# Function to apply artistic style to far objects and resizes frame for faster computation
-def low_apply_artsyle_far(frame, h, w, style_transfer_model):
+    style_transfer_model.setInput(inp)
+    stylized_output = style_transfer_model.forward()
+    stylized_output = stylized_output.reshape(3, h // 2, w // 2)
+    stylized_output[0] += 103.939
+    stylized_output[1] += 116.779
+    stylized_output[2] += 123.680
+    stylized_output = stylized_output.transpose(1, 2, 0)
+    stylized_output = np.clip(stylized_output, 0, 255).astype(np.uint8)
+    return cv2.resize(stylized_output, (w, h))
     small_frame = cv2.resize(frame, (w // 2, h // 2))
     inp_far = cv2.dnn.blobFromImage(
         small_frame,
@@ -186,21 +166,21 @@ def generate(N, foreground, background):
 
         # Apply style transfer for close objects using 1st style model
         if foreground == "high":
-            stylized_output_close = high_apply_artsyle_close(
+            stylized_output_close = high_apply_artsyle(
                 frame, h, w, style_transfer_model_1
             )
         else:
-            stylized_output_close = low_apply_artsyle_close(
+            stylized_output_close = low_apply_artsyle(
                 frame, h, w, style_transfer_model_1
             )
 
         # Apply style transfer for far objects using 2nd style model
         if background == "high":
-            stylized_output_far = high_apply_artsyle_far(
+            stylized_output_far = high_apply_artsyle(
                 frame, h, w, style_transfer_model_2
             )
         else:
-            stylized_output_far = low_apply_artsyle_far(
+            stylized_output_far = low_apply_artsyle(
                 frame, h, w, style_transfer_model_2
             )
 
