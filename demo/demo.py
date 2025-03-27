@@ -12,7 +12,7 @@ import onnxruntime as ort
 # - A higher N at low resolution has minimal impact.
 
 
-# Function to apply artistic style to close objects ensuring high resolution
+# Function to apply artistic style to close/far objects ensuring high resolution
 def high_apply_artsyle(frame, h, w, style_transfer_model):
     inp = cv2.dnn.blobFromImage(
         frame, 1.0, (w, h), (103.939, 116.779, 123.680), swapRB=False, crop=False
@@ -28,7 +28,7 @@ def high_apply_artsyle(frame, h, w, style_transfer_model):
     return stylized_output
 
 
-# Function to apply artistic style to close objects and resizes frame for faster computation
+# Function to apply artistic style to close/far objects and resizes frame for faster computation
 def low_apply_artsyle(frame, h, w, style_transfer_model):
     small_frame = cv2.resize(frame, (w, h // 2))
     inp = cv2.dnn.blobFromImage(
