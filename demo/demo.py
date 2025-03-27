@@ -48,24 +48,6 @@ def low_apply_artsyle(frame, h, w, style_transfer_model):
     stylized_output = stylized_output.transpose(1, 2, 0)
     stylized_output = np.clip(stylized_output, 0, 255).astype(np.uint8)
     return cv2.resize(stylized_output, (w, h))
-    small_frame = cv2.resize(frame, (w // 2, h // 2))
-    inp_far = cv2.dnn.blobFromImage(
-        small_frame,
-        1.0,
-        (w // 2, h // 2),
-        (103.939, 116.779, 123.680),
-        swapRB=False,
-        crop=False,
-    )
-    style_transfer_model.setInput(inp_far)
-    stylized_output_far = style_transfer_model.forward()
-    stylized_output_far = stylized_output_far.reshape(3, h // 2, w // 2)
-    stylized_output_far[0] += 103.939
-    stylized_output_far[1] += 116.779
-    stylized_output_far[2] += 123.680
-    stylized_output_far = stylized_output_far.transpose(1, 2, 0)
-    stylized_output_far = np.clip(stylized_output_far, 0, 255).astype(np.uint8)
-    return cv2.resize(stylized_output_far, (w, h))
 
 
 # Function to handle depth map extraction
