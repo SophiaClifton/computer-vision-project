@@ -15,7 +15,12 @@ import onnxruntime as ort
 # Function to apply artistic style to close/far objects ensuring high resolution
 def high_apply_artsyle(frame, h, w, style_transfer_model):
     inp = cv2.dnn.blobFromImage(
-        frame, 1.0, (w, h), (103.939, 116.779, 123.680), swapRB=False, crop=False
+        frame,
+        1.0, 
+        (w, h), 
+        (103.939, 116.779, 123.680), 
+        swapRB=False, 
+        crop=False
     )
     style_transfer_model.setInput(inp)
     stylized_output = style_transfer_model.forward()
