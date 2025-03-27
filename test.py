@@ -1,7 +1,8 @@
+import os
+import urllib.request
+
 import cv2
 import numpy as np
-import urllib.request
-import os
 import onnxruntime as ort
 
 # To optimize performance, divide h and w by //2 in the style transfer functions.
@@ -18,7 +19,9 @@ lambda_temp = 0.3
 # Function to apply artistic style to close objects
 def apply_artsyle_close(frame, h, w, style_transfer_model):
     # small_frame = cv2.resize(frame, (w, h // 2))  # Resize for faster inference
-    inp_close = cv2.dnn.blobFromImage(frame, 1.0, (w, h), (103.939, 116.779, 123.680), swapRB=False, crop=False)
+    inp_close = cv2.dnn.blobFromImage(
+        frame, 1.0, (w, h), (103.939, 116.779, 123.680), swapRB=False, crop=False
+    )
     style_transfer_model.setInput(inp_close)
     stylized_output_close = style_transfer_model.forward()
     stylized_output_close = stylized_output_close.reshape(3, h, w)
@@ -34,7 +37,9 @@ def apply_artsyle_close(frame, h, w, style_transfer_model):
 # Function to apply artistic style to far objects
 def apply_artsyle_far(frame, h, w, style_transfer_model):
     # small_frame = cv2.resize(frame, (w // 2, h // 2))  # Resize for faster inference
-    inp_far = cv2.dnn.blobFromImage(frame, 1.0, (w, h), (103.939, 116.779, 123.680), swapRB=False, crop=False)
+    inp_far = cv2.dnn.blobFromImage(
+        frame, 1.0, (w, h), (103.939, 116.779, 123.680), swapRB=False, crop=False
+    )
     style_transfer_model.setInput(inp_far)
     stylized_output_far = style_transfer_model.forward()
     stylized_output_far = stylized_output_far.reshape(3, h, w)
@@ -76,7 +81,10 @@ depth_model_url = "https://huggingface.co/julienkay/sentis-MiDaS/blob/main/onnx/
 depth_model_path = "midas.onnx"
 
 # Download NST models if not already present
-for url, path in [(style_model_url_1, style_model_path_1), (style_model_url_2, style_model_path_2)]:
+for url, path in [
+    (style_model_url_1, style_model_path_1),
+    (style_model_url_2, style_model_path_2),
+]:
     if not os.path.exists(path):
         print(f"Downloading {path}...")
         urllib.request.urlretrieve(url, path)
@@ -96,15 +104,15 @@ if cv2.cuda.getCudaEnabledDeviceCount() > 0:
     style_transfer_model_2.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
     style_transfer_model_2.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
 
-    providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+    providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
 
 elif ort.get_device() == "ROCM":  # ROCm support for AMD GPUs (Linux)
     print("CUDA not available, but ROCm (AMD GPU) is available.")
-    providers = ['ROCMExecutionProvider', 'CPUExecutionProvider']
+    providers = ["ROCMExecutionProvider", "CPUExecutionProvider"]
 
 else:
     print("No GPU acceleration available. Running on CPU.")
-    providers = ['CPUExecutionProvider']
+    providers = ["CPUExecutionProvider"]
 
 # Load the MiDaS depth estimation model using ONNX Runtime
 depth_session = ort.InferenceSession(depth_model_path, providers=providers)
@@ -157,17 +165,30 @@ while True:
     if prev_frame is not None and prev_stylized is not None:
         prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
         curr_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        flow = cv2.calcOpticalFlowFarneback(prev_gray, curr_gray, None,
-                                            pyr_scale=0.5, levels=3, winsize=15,
-                                            iterations=3, poly_n=5, poly_sigma=1.2, flags=0)
+        flow = cv2.calcOpticalFlowFarneback(
+            prev_gray,
+            curr_gray,
+            None,
+            pyr_scale=0.5,
+            levels=3,
+            winsize=15,
+            iterations=3,
+            poly_n=5,
+            poly_sigma=1.2,
+            flags=0,
+        )
         h_frame, w_frame = final_output.shape[:2]
         flow_map = -flow
         grid_x, grid_y = np.meshgrid(np.arange(w_frame), np.arange(h_frame))
         remap_x = (grid_x + flow_map[..., 0]).astype(np.float32)
         remap_y = (grid_y + flow_map[..., 1]).astype(np.float32)
-        warped_prev = cv2.remap(prev_stylized, remap_x, remap_y, interpolation=cv2.INTER_LINEAR)
+        warped_prev = cv2.remap(
+            prev_stylized, remap_x, remap_y, interpolation=cv2.INTER_LINEAR
+        )
 
-        final_output = cv2.addWeighted(final_output, 1 - lambda_temp, warped_prev, lambda_temp, 0)
+        final_output = cv2.addWeighted(
+            final_output, 1 - lambda_temp, warped_prev, lambda_temp, 0
+        )
 
     # Display the final output
     cv2.imshow("Artistic Depth Feedback", final_output)
@@ -176,7 +197,7 @@ while True:
     prev_frame = frame.copy()
     prev_stylized = final_output.copy()
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):  # Press "q" to exit video
+    if cv2.waitKey(1) & 0xFF == ord("q"):  # Press "q" to exit video
         break
 
 cap.release()

@@ -1,8 +1,11 @@
 {
-  "editor.formatOnSave": true,
-  "[python]": {
-    "editor.defaultFormatter": "charliermarsh.ruff"
-  },
-  "editor.defaultFormatter": "esbenp.prettier-vscode",
-  "prettier.tabWidth": 4
+    "editor.formatOnSave": true,
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff"
+    },
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "prettier.tabWidth": 4,
+    "ruff.codeAction.fixViolation": {
+        "enable": true
+    }
 }

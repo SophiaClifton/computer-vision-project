@@ -1,7 +1,8 @@
+import os
+import urllib.request
+
 import cv2
 import numpy as np
-import urllib.request
-import os
 import onnxruntime as ort
 
 # NOTES: COMPUTATIONALLY EXPENSIVE, test.py is wip of optimized version
@@ -13,11 +14,17 @@ lambda_temp = 0.3
 def apply_artsyle_close(frame, h, w, style_transfer_model):
     # Convert frame to blob for OpenCV's dlm
     # Mean subtraction normalizes input using ImageNet-trained model values
-    inp_close = cv2.dnn.blobFromImage(frame, 1.0, (w, h), (103.939, 116.779, 123.680), swapRB=False, crop=False)
+    inp_close = cv2.dnn.blobFromImage(
+        frame, 1.0, (w, h), (103.939, 116.779, 123.680), swapRB=False, crop=False
+    )
     # Feed frame into style transfer model # 1
     style_transfer_model.setInput(inp_close)
-    stylized_output_close = style_transfer_model.forward()  # Generates styled version by forward propagating in neural net
-    stylized_output_close = stylized_output_close.reshape(3, h, w)  # Brings back RGB format
+    stylized_output_close = (
+        style_transfer_model.forward()
+    )  # Generates styled version by forward propagating in neural net
+    stylized_output_close = stylized_output_close.reshape(
+        3, h, w
+    )  # Brings back RGB format
 
     # Re-add mean values to restore color distribution
     stylized_output_close[0] += 103.939
@@ -33,12 +40,15 @@ def apply_artsyle_close(frame, h, w, style_transfer_model):
 def apply_artsyle_far(frame, h, w, style_transfer_model):
     # Convert frame to blob for OpenCV's dlm
     # Mean subtraction normalizes input using ImageNet-trained model values
-    inp_far = cv2.dnn.blobFromImage(frame, 1.0, (w, h), (103.939, 116.779, 123.680), swapRB=False,
-                                    crop=False)  # Converts frame into blob, needed for open cvs dlm
+    inp_far = cv2.dnn.blobFromImage(
+        frame, 1.0, (w, h), (103.939, 116.779, 123.680), swapRB=False, crop=False
+    )  # Converts frame into blob, needed for open cvs dlm
 
     # Feed frame into style transfer model # 2
     style_transfer_model.setInput(inp_far)
-    stylized_output_far = style_transfer_model.forward()  # Generates styled version by forward propagating in neural net
+    stylized_output_far = (
+        style_transfer_model.forward()
+    )  # Generates styled version by forward propagating in neural net
     stylized_output_far = stylized_output_far.reshape(3, h, w)  # Brings back RGB format
 
     # Re-add mean values to restore color distribution
@@ -83,8 +93,11 @@ depth_model_url = "https://huggingface.co/julienkay/sentis-MiDaS/blob/main/onnx/
 depth_model_path = "midas.onnx"
 
 # Download models if not already
-for url, path in [(style_model_url_1, style_model_path_1), (style_model_url_2, style_model_path_2),
-                  (depth_model_url, depth_model_path)]:
+for url, path in [
+    (style_model_url_1, style_model_path_1),
+    (style_model_url_2, style_model_path_2),
+    (depth_model_url, depth_model_path),
+]:
     if not os.path.exists(path):
         print(f"Downloading {path}...")
         urllib.request.urlretrieve(url, path)
@@ -134,8 +147,12 @@ while True:
 
     # Blend the results based on depth regions
     final_output = np.zeros_like(frame)
-    final_output[close_mask] = stylized_output_close[close_mask]  # Only apply close-artsyle on close mask region
-    final_output[far_mask] = stylized_output_far[far_mask]  # Only apply far-artsyle on far mask region
+    final_output[close_mask] = stylized_output_close[
+        close_mask
+    ]  # Only apply close-artsyle on close mask region
+    final_output[far_mask] = stylized_output_far[
+        far_mask
+    ]  # Only apply far-artsyle on far mask region
 
     # Temporal smoothing block using optical flow
     if prev_frame is not None and prev_stylized is not None:
@@ -143,19 +160,32 @@ while True:
         prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
         curr_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         # Calculate optical flow between previous and current frame
-        flow = cv2.calcOpticalFlowFarneback(prev_gray, curr_gray, None,
-                                            pyr_scale=0.5, levels=3, winsize=15,
-                                            iterations=3, poly_n=5, poly_sigma=1.2, flags=0)
+        flow = cv2.calcOpticalFlowFarneback(
+            prev_gray,
+            curr_gray,
+            None,
+            pyr_scale=0.5,
+            levels=3,
+            winsize=15,
+            iterations=3,
+            poly_n=5,
+            poly_sigma=1.2,
+            flags=0,
+        )
         # Warp previous stylized frame using computed optical flow
         h_frame, w_frame = final_output.shape[:2]
         flow_map = -flow  # Reverse flow for warping
         grid_x, grid_y = np.meshgrid(np.arange(w_frame), np.arange(h_frame))
         remap_x = (grid_x + flow_map[..., 0]).astype(np.float32)
         remap_y = (grid_y + flow_map[..., 1]).astype(np.float32)
-        warped_prev = cv2.remap(prev_stylized, remap_x, remap_y, interpolation=cv2.INTER_LINEAR)
+        warped_prev = cv2.remap(
+            prev_stylized, remap_x, remap_y, interpolation=cv2.INTER_LINEAR
+        )
 
         # Blend current output with warped previous output for temporal smoothing
-        final_output = cv2.addWeighted(final_output, 1 - lambda_temp, warped_prev, lambda_temp, 0)
+        final_output = cv2.addWeighted(
+            final_output, 1 - lambda_temp, warped_prev, lambda_temp, 0
+        )
 
     # Display the final output
     cv2.imshow("Artistic Depth Feedback", final_output)
@@ -164,7 +194,7 @@ while True:
     prev_frame = frame.copy()
     prev_stylized = final_output.copy()
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):  # Press "q" to exit video
+    if cv2.waitKey(1) & 0xFF == ord("q"):  # Press "q" to exit video
         break
 
 cap.release()
