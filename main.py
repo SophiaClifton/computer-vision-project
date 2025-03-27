@@ -104,8 +104,8 @@ for url, path in [
         print(f"{path} downloaded successfully.")
 
 # Load the style transfer models using OpenCV
-style_transfer_model_1 = cv2.dnn.readNetFromTorch(style_model_path_1)
-style_transfer_model_2 = cv2.dnn.readNetFromTorch(style_model_path_2)
+style_transfer_model_1 = cv2.dnn.readNetFromTorch(style_model_path_2)
+style_transfer_model_2 = cv2.dnn.readNetFromTorch(style_model_path_1)
 
 # Load the MiDaS depth estimation model using onnxruntime
 depth_session = ort.InferenceSession(depth_model_path)
@@ -136,8 +136,8 @@ while True:
     # depth_colormap = cv2.applyColorMap(255 - depth_map, cv2.COLORMAP_JET)
 
     # Create masks for close and far regions
-    close_mask = depth_map < 127  # Since closer objects have lower depth values
-    far_mask = depth_map >= 127  # Since farther objects have higher depth values
+    close_mask = depth_map >= 127  # Since closer objects have lower depth values
+    far_mask = depth_map < 127  # Since farther objects have higher depth values
 
     # Apply style transfer for close objects -> 1st style model
     stylized_output_close = apply_artsyle_close(frame, h, w, style_transfer_model_1)

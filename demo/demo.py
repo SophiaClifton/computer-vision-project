@@ -15,7 +15,6 @@ import onnxruntime as ort
 
 # Function to apply artistic style to close objects ensuring high resolution
 def high_apply_artsyle_close(frame, h, w, style_transfer_model):
-    # small_frame = cv2.resize(frame, (w, h // 2))  # Resize for faster inference
     inp_close = cv2.dnn.blobFromImage(
         frame, 1.0, (w, h), (103.939, 116.779, 123.680), swapRB=False, crop=False
     )
@@ -27,7 +26,6 @@ def high_apply_artsyle_close(frame, h, w, style_transfer_model):
     stylized_output_close[2] += 123.680
     stylized_output_close = stylized_output_close.transpose(1, 2, 0)
     stylized_output_close = np.clip(stylized_output_close, 0, 255).astype(np.uint8)
-    # return cv2.resize(stylized_output_close, (w, h)) use this instead if using //2 for lower res
     return stylized_output_close
 
 
@@ -93,7 +91,6 @@ def low_apply_artsyle_far(frame, h, w, style_transfer_model):
 
 # Function to handle depth map extraction
 def get_depth_map(frame, depth_session, h, w):
-    # Resize for depth estimation (lower resolution)
     depth_input = cv2.resize(frame, (256, 256))
     depth_input = depth_input.astype(np.float32) / 255.0
     depth_input = np.transpose(depth_input, (2, 0, 1))  # Convert to NCHW format
@@ -164,7 +161,6 @@ def generate(N, foreground, background):
         exit()
 
     frame_count = 0
-    # N = 5  # Apply every N frames, N=2 slower but better fps, N=5 choppier but real-time -> can only tell diff at higher res img
 
     # Initialize previous frame variables for temporal smoothing
     prev_frame = None
