@@ -21,6 +21,7 @@ def generate():
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    return "Done"
 
 if __name__ == '__main__':
     app.run(debug=True)

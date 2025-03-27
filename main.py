@@ -160,7 +160,7 @@ while True:
     # Display the final output
     cv2.imshow("Artistic Depth Feedback", final_output)
 
-    # **New: Update previous frame variables**
+    # Update previous frame variables
     prev_frame = frame.copy()
     prev_stylized = final_output.copy()
 
