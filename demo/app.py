@@ -14,8 +14,8 @@ app = Flask(__name__, static_folder=".", static_url_path="")
 style_model_1, style_model_2, depth_session = demo.get_models()
 
 # Global variables for streaming
-frame_queue = queue.Queue(maxsize=10)
-processed_frames = queue.Queue(maxsize=10)
+frame_queue = queue.Queue(maxsize=30)
+processed_frames = queue.Queue(maxsize=30)
 streaming_active = False
 processing_thread = None
 
