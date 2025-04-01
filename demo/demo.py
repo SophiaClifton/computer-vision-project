@@ -216,12 +216,10 @@ def get_models(providers=None):
     # Load the MiDaS depth estimation model
     print(f"Loading depth model with providers: {providers}")
     try:
-        # Create a session options object and set execution mode
         options = ort.SessionOptions()
         options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-        options.enable_profiling = True
+        options.enable_profiling = False
 
-        # Increase optimization level
         depth_session = ort.InferenceSession(
             depth_model_path, options, providers=providers
         )
