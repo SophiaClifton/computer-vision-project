@@ -1,7 +1,5 @@
 Flask==3.1.0
+flask_socketio==5.5.1
 numpy==1.22.2
-onnxruntime==1.21.0
 onnxruntime_gpu==1.21.0
-opencv_python==4.11.0.86
-opencv_python_headless==4.11.0.86
 ruff==0.11.2

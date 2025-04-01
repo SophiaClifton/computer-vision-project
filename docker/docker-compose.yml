@@ -1,17 +1,16 @@
 services:
-    cuda_tf_opencv:
+    cuda_opencv:
         build:
             context: .
             dockerfile: Dockerfile
         image: cuda_tensorflow_opencv:latest
-        container_name: cuda_tf_opencv
+        container_name: cuda_opencv
         environment:
             - NVIDIA_VISIBLE_DEVICES=all # Make all GPUs visible
             - NVIDIA_DRIVER_CAPABILITIES=all # Enable all NVIDIA driver capabilities
         volumes:
             - ../:/app
-        ports:
-            - "8888:8888" # For Jupyter notebook if needed
+        network_mode: "host"
         restart: unless-stopped
         deploy:
             resources:
