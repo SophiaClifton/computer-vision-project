@@ -4,46 +4,58 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>NST & DM Project</title>
+        <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
         <style>
-            .video-container {
-                display: flex;
-                justify-content: space-around;
-                margin: 20px 0;
-                gap: 20px;
-            }
-            video,
-            img {
-                width: 480px;
-                height: 360px;
-                object-fit: contain;
-                border: 1px solid #ccc;
-            }
-            .controls {
-                text-align: center;
-                margin: 20px 0;
-            }
-            button {
-                padding: 10px 20px;
-                margin: 0 10px;
-                font-size: 16px;
-                cursor: pointer;
-            }
-            h1 {
-                text-align: center;
+            .stream-container-height {
+                min-height: 360px;
             }
         </style>
     </head>
-    <body>
-        <h1>Real-time Style Transfer with Depth</h1>
+    <body class="bg-gray-900 p-4 text-gray-200">
+        <div class="max-w-6xl mx-auto">
+            <h1 class="text-3xl font-bold text-center mb-6 text-gray-100">
+                Real-time Style Transfer with Depth
+            </h1>
 
-        <div class="video-container">
-            <video id="webcam" autoplay playsinline></video>
-            <img id="processedFeed" src="" alt="Processed Stream" />
-        </div>
+            <div
+                class="flex flex-col md:flex-row items-center justify-center gap-4 mb-6"
+            >
+                <div
+                    class="video-container w-full bg-gray-800 rounded-lg shadow-lg p-1 flex items-center justify-center stream-container-height"
+                >
+                    <video
+                        id="webcam"
+                        autoplay
+                        playsinline
+                        class="w-full h-auto object-contain rounded-lg"
+                    ></video>
+                </div>
+                <div
+                    class="image-container w-full bg-gray-800 rounded-lg shadow-lg p-1 flex items-center justify-center stream-container-height"
+                >
+                    <img
+                        id="processedFeed"
+                        src=""
+                        alt="Processed Stream"
+                        class="w-full h-auto object-contain rounded-lg"
+                    />
+                </div>
+            </div>
 
-        <div class="controls">
-            <button onclick="startStream()">Start Stream</button>
-            <button onclick="stopStream()">Stop Stream</button>
+            <div class="flex justify-center gap-3 my-4">
+                <button
+                    onclick="startStream()"
+                    class="bg-gray-600 hover:bg-gray-500 text-white font-semibold py-2 px-6 rounded-lg shadow transition duration-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50"
+                >
+                    Start Stream
+                </button>
+                <button
+                    onclick="stopStream()"
+                    class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-6 rounded-lg shadow transition duration-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50"
+                >
+                    Stop Stream
+                </button>
+            </div>
         </div>
 
         <script>
@@ -60,21 +72,29 @@
                             height: 360,
                         },
                     });
-                    const video = document.getElementById("webcam");
+                    const video = document.querySelector("#webcam");
                     video.srcObject = mediaStream;
 
                     // Start the server-side stream using multipart/x-mixed-replace
-                    document.getElementById("processedFeed").src = "/stream";
+                    document.querySelector("#processedFeed").src = "/stream";
 
                     // Start sending frames to the server
                     isStreaming = true;
                     uploadInterval = setInterval(uploadFrame, 1000 / FPS);
+
+                    // Add min-height class to containers
+                    const containers = document.querySelectorAll(
+                        ".video-container, .image-container"
+                    );
+                    for (const container of containers) {
+                        container.classList.remove("stream-container-height");
+                    }
                 } catch (err) {
                     console.error("Error accessing webcam:", err);
                 }
             }
 
-            function stopStream() {
+            async function stopStream() {
                 // Stop sending frames
                 isStreaming = false;
                 if (uploadInterval) {
@@ -84,23 +104,38 @@
 
                 // Stop the webcam
                 if (mediaStream) {
-                    mediaStream.getTracks().forEach((track) => track.stop());
-                    document.getElementById("webcam").srcObject = null;
+                    for (const track of mediaStream.getTracks()) {
+                        track.stop();
+                    }
+                    document.querySelector("#webcam").srcObject = null;
                 }
 
-                document.getElementById("processedFeed").src = "";
+                document.querySelector("#processedFeed").src = "";
 
                 // Notify server
-                fetch("/stop_stream", { method: "POST" })
-                    .then((response) => response.json())
-                    .then((data) => console.log("Stream stopped:", data))
-                    .catch((error) => console.error("Error:", error));
+                try {
+                    const response = await fetch("/stop_stream", {
+                        method: "POST",
+                    });
+                    const data = await response.json();
+                    console.log("Stream stopped:", data);
+                } catch (error) {
+                    console.error("Error stopping stream:", error);
+                }
+
+                // Remove min-height class from containers
+                const containers = document.querySelectorAll(
+                    ".video-container, .image-container"
+                );
+                for (const container of containers) {
+                    container.classList.add("stream-container-height");
+                }
             }
 
             async function uploadFrame() {
                 if (!isStreaming) return;
 
-                const video = document.getElementById("webcam");
+                const video = document.querySelector("#webcam");
                 if (!video.videoWidth) return; // Video not ready yet
 
                 const canvas = document.createElement("canvas");
@@ -119,12 +154,13 @@
                     const formData = new FormData();
                     formData.append("frame", blob);
 
-                    fetch("/upload_frame", {
+                    // Using fetch without IIFE since we're already in an async function
+                    await fetch("/upload_frame", {
                         method: "POST",
                         body: formData,
                     });
                 } catch (error) {
-                    console.error("Error uploading frame:", error);
+                    console.error("Error preparing or uploading frame:", error);
                 }
             }
         </script>
