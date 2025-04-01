@@ -16,6 +16,7 @@
                 width: 480px;
                 height: 360px;
                 object-fit: contain;
+                border: 1px solid #ccc;
             }
             .controls {
                 text-align: center;
@@ -37,7 +38,7 @@
 
         <div class="video-container">
             <video id="webcam" autoplay playsinline></video>
-            <img id="processedFeed" alt="Processed Stream" />
+            <img id="processedFeed" src="" alt="Processed Stream" />
         </div>
 
         <div class="controls">
@@ -48,6 +49,7 @@
         <script>
             let mediaStream = null;
             let isStreaming = false;
+            let uploadInterval = null;
             const FPS = 24;
 
             async function startStream() {
@@ -60,63 +62,69 @@
                     });
                     const video = document.getElementById("webcam");
                     video.srcObject = mediaStream;
+
+                    // Start the server-side stream using multipart/x-mixed-replace
+                    document.getElementById("processedFeed").src = "/stream";
+
+                    // Start sending frames to the server
                     isStreaming = true;
-                    streamFrames();
+                    uploadInterval = setInterval(uploadFrame, 1000 / FPS);
                 } catch (err) {
                     console.error("Error accessing webcam:", err);
                 }
             }
 
             function stopStream() {
+                // Stop sending frames
+                isStreaming = false;
+                if (uploadInterval) {
+                    clearInterval(uploadInterval);
+                    uploadInterval = null;
+                }
+
+                // Stop the webcam
                 if (mediaStream) {
                     mediaStream.getTracks().forEach((track) => track.stop());
                     document.getElementById("webcam").srcObject = null;
-                    document.getElementById("processedFeed").src = "";
                 }
-                isStreaming = false;
+
+                document.getElementById("processedFeed").src = "";
+
+                // Notify server
                 fetch("/stop_stream", { method: "POST" })
                     .then((response) => response.json())
                     .then((data) => console.log("Stream stopped:", data))
                     .catch((error) => console.error("Error:", error));
             }
 
-            async function streamFrames() {
+            async function uploadFrame() {
+                if (!isStreaming) return;
+
                 const video = document.getElementById("webcam");
+                if (!video.videoWidth) return; // Video not ready yet
+
                 const canvas = document.createElement("canvas");
                 const context = canvas.getContext("2d");
-                canvas.width = 480;
-                canvas.height = 360;
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
 
-                while (isStreaming) {
-                    // Draw video frame to canvas
-                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                // Draw video frame to canvas
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                    // Convert to blob and send to server
+                // Convert to blob and send to server
+                try {
                     const blob = await new Promise((resolve) =>
-                        canvas.toBlob(resolve, "image/jpeg")
+                        canvas.toBlob(resolve, "image/jpeg", 0.8)
                     );
                     const formData = new FormData();
                     formData.append("frame", blob);
 
-                    try {
-                        const response = await fetch("/process_frame", {
-                            method: "POST",
-                            body: formData,
-                        });
-
-                        if (response.ok) {
-                            const processedImageBlob = await response.blob();
-                            document.getElementById("processedFeed").src =
-                                URL.createObjectURL(processedImageBlob);
-                        }
-                    } catch (error) {
-                        console.error("Error sending frame:", error);
-                    }
-
-                    // Wait to maintain desired FPS
-                    await new Promise((resolve) =>
-                        setTimeout(resolve, 1000 / FPS)
-                    );
+                    fetch("/upload_frame", {
+                        method: "POST",
+                        body: formData,
+                    });
+                } catch (error) {
+                    console.error("Error uploading frame:", error);
                 }
             }
         </script>

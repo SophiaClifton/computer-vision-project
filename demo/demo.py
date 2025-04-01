@@ -6,6 +6,19 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
+# Print CUDA information
+print(f"OpenCV version: {cv2.__version__}")
+print(f"CUDA available: {cv2.cuda.getCudaEnabledDeviceCount() > 0}")
+if cv2.cuda.getCudaEnabledDeviceCount() > 0:
+    print(f"CUDA devices: {cv2.cuda.getCudaEnabledDeviceCount()}")
+    for i in range(cv2.cuda.getCudaEnabledDeviceCount()):
+        print(f"CUDA device {i}: {cv2.cuda.getDevice()}")
+
+# Print ONNX Runtime information
+print(f"ONNXRuntime version: {ort.__version__}")
+print(f"Available providers: {ort.get_available_providers()}")
+print(f"Current device: {ort.get_device()}")
+
 # Adjust N for better video feedback:
 # - A higher N at high resolution improves speedy playback significantly.
 # - A higher N at low resolution has minimal impact.
@@ -13,6 +26,9 @@ import onnxruntime as ort
 
 # Function to apply artistic style to close/far objects ensuring high resolution
 def high_apply_artsyle(frame, h, w, style_transfer_model):
+    # Start timer for performance measurement
+    start_time = cv2.getTickCount()
+
     inp = cv2.dnn.blobFromImage(
         frame, 1.0, (w, h), (103.939, 116.779, 123.680), swapRB=False, crop=False
     )
@@ -24,12 +40,21 @@ def high_apply_artsyle(frame, h, w, style_transfer_model):
     stylized_output[2] += 123.680
     stylized_output = stylized_output.transpose(1, 2, 0)
     stylized_output = np.clip(stylized_output, 0, 255).astype(np.uint8)
+
+    # End timer and print performance info
+    end_time = cv2.getTickCount()
+    process_time = (end_time - start_time) / cv2.getTickFrequency() * 1000
+    print(f"High-res style transfer time: {process_time:.2f}ms")
+
     return stylized_output
 
 
 # Function to apply artistic style to close/far objects and resizes frame for faster computation
 def low_apply_artsyle(frame, h, w, style_transfer_model):
-    small_frame = cv2.resize(frame, (w, h // 2))
+    # Start timer for performance measurement
+    start_time = cv2.getTickCount()
+
+    small_frame = cv2.resize(frame, (w // 2, h // 2))
     inp = cv2.dnn.blobFromImage(
         small_frame,
         1.0,
@@ -46,11 +71,21 @@ def low_apply_artsyle(frame, h, w, style_transfer_model):
     stylized_output[2] += 123.680
     stylized_output = stylized_output.transpose(1, 2, 0)
     stylized_output = np.clip(stylized_output, 0, 255).astype(np.uint8)
-    return cv2.resize(stylized_output, (w, h))
+    result = cv2.resize(stylized_output, (w, h))
+
+    # End timer and print performance info
+    end_time = cv2.getTickCount()
+    process_time = (end_time - start_time) / cv2.getTickFrequency() * 1000
+    print(f"Low-res style transfer time: {process_time:.2f}ms")
+
+    return result
 
 
 # Function to handle depth map extraction
 def get_depth_map(frame, depth_session, h, w):
+    # Start timer for performance measurement
+    start_time = cv2.getTickCount()
+
     depth_input = cv2.resize(frame, (256, 256))
     depth_input = depth_input.astype(np.float32) / 255.0
     depth_input = np.transpose(depth_input, (2, 0, 1))  # Convert to NCHW format
@@ -64,6 +99,12 @@ def get_depth_map(frame, depth_session, h, w):
 
     # Normalize depth map to 0-255 range
     depth_map = cv2.normalize(depth_map, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+
+    # End timer and print performance info
+    end_time = cv2.getTickCount()
+    process_time = (end_time - start_time) / cv2.getTickFrequency() * 1000
+    print(f"Depth map extraction time: {process_time:.2f}ms")
+
     return depth_map
 
 
@@ -86,6 +127,9 @@ def process_frame(
     background,
 ):
     """Process a single frame without temporal smoothing"""
+    # Start timer for performance measurement
+    start_time = cv2.getTickCount()
+
     h, w, _ = frame.shape
     depth_map = get_depth_map(frame, depth_session, h, w)
 
@@ -106,6 +150,11 @@ def process_frame(
     final_output[close_mask] = stylized_output_close[close_mask]
     final_output[far_mask] = stylized_output_far[far_mask]
 
+    # End timer and print performance info
+    end_time = cv2.getTickCount()
+    total_time = (end_time - start_time) / cv2.getTickFrequency() * 1000
+    print(f"Total frame processing time: {total_time:.2f}ms")
+
     return final_output
 
 
@@ -117,20 +166,39 @@ def get_models(providers=None):
         (style_model_url_2, style_model_path_2),
     ]:
         if not os.path.exists(path):
+            print(f"Downloading {path}...")
             urllib.request.urlretrieve(url, path)
 
     # Load NST models using OpenCV
+    print("Loading style transfer models...")
     style_transfer_model_1 = cv2.dnn.readNetFromTorch(style_model_path_2)
     style_transfer_model_2 = cv2.dnn.readNetFromTorch(style_model_path_1)
 
     # GPU optimization options for NVDIA GPU and AMD RADEON GPU
     if cv2.cuda.getCudaEnabledDeviceCount() > 0:
-        print("CUDA is available! Running on GPU...")
+        print("CUDA is available! Targeting GPU...")
         style_transfer_model_1.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
         style_transfer_model_1.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+        print("Model 1 configured to use CUDA backend and target")
 
         style_transfer_model_2.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
         style_transfer_model_2.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+        print("Model 2 configured to use CUDA backend and target")
+
+        # Check available backends in this OpenCV version
+        try:
+            cuda_backend = (
+                style_transfer_model_1.getPreferableBackend()
+                == cv2.dnn.DNN_BACKEND_CUDA
+            )
+            cuda_target = (
+                style_transfer_model_1.getPreferableTarget() == cv2.dnn.DNN_TARGET_CUDA
+            )
+            print(f"Using CUDA backend: {cuda_backend}, CUDA target: {cuda_target}")
+        except AttributeError:
+            print(
+                "Note: This OpenCV version doesn't support getPreferableBackend(), but CUDA is configured"
+            )
 
         if providers is None:
             providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
@@ -146,7 +214,31 @@ def get_models(providers=None):
             providers = ["CPUExecutionProvider"]
 
     # Load the MiDaS depth estimation model
-    depth_session = ort.InferenceSession(depth_model_path, providers=providers)
+    print(f"Loading depth model with providers: {providers}")
+    try:
+        # Create a session options object and set execution mode
+        options = ort.SessionOptions()
+        options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        options.enable_profiling = True
+
+        # Increase optimization level
+        depth_session = ort.InferenceSession(
+            depth_model_path, options, providers=providers
+        )
+        print(f"Depth model providers: {depth_session.get_providers()}")
+        print(f"Depth model actual provider: {depth_session._providers}")
+    except Exception as e:
+        print(f"Error initializing ONNX Runtime with GPU providers: {e}")
+        print("Falling back to CPU execution...")
+        depth_session = ort.InferenceSession(
+            depth_model_path, providers=["CPUExecutionProvider"]
+        )
+
+    # Run a test inference to warm up models and check performance
+    print("Warming up models with test inference...")
+    test_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    _ = get_depth_map(test_frame, depth_session, 480, 640)
+    _ = high_apply_artsyle(test_frame, 480, 640, style_transfer_model_1)
 
     return style_transfer_model_1, style_transfer_model_2, depth_session
 
