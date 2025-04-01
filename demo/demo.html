@@ -4,70 +4,121 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>NST & DM Project</title>
-        <script>
-            function generate() {
-                var foregroundRes = document.getElementById("foreground").value;
-                var backgroundRes = document.getElementById("background").value;
-                var N = document.getElementById("frames").value;
-
-                if (foregroundRes === "" || backgroundRes === "" || N === "") {
-                    alert("Please fill all fields.");
-                    return;
-                }
-
-                // Send data to Flask server
-                fetch("/generate", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        foreground: foregroundRes,
-                        background: backgroundRes,
-                        frames: N,
-                    }),
-                })
-                    .then((response) => response.json())
-                    .then((data) => {
-                        if (data.error) {
-                            alert("Error: " + data.error);
-                        } else {
-                            alert("Output: " + data.output);
-                        }
-                    })
-                    .catch((error) => console.error("Error:", error));
+        <style>
+            .video-container {
+                display: flex;
+                justify-content: space-around;
+                margin: 20px 0;
+                gap: 20px;
             }
-        </script>
+            video,
+            img {
+                width: 480px;
+                height: 360px;
+                object-fit: contain;
+            }
+            .controls {
+                text-align: center;
+                margin: 20px 0;
+            }
+            button {
+                padding: 10px 20px;
+                margin: 0 10px;
+                font-size: 16px;
+                cursor: pointer;
+            }
+            h1 {
+                text-align: center;
+            }
+        </style>
     </head>
     <body>
-        <h1>NST & DM Video Feedback at Different Resolutions</h1>
+        <h1>Real-time Style Transfer with Depth</h1>
 
-        <label for="foreground">Foreground Resolution:</label>
-        <select id="foreground">
-            <option value="">Select</option>
-            <option value="high">High</option>
-            <option value="low">Low</option>
-        </select>
-        <br /><br />
+        <div class="video-container">
+            <video id="webcam" autoplay playsinline></video>
+            <img id="processedFeed" alt="Processed Stream" />
+        </div>
 
-        <label for="background">Background Resolution:</label>
-        <select id="background">
-            <option value="">Select</option>
-            <option value="high">High</option>
-            <option value="low">Low</option>
-        </select>
-        <br /><br />
+        <div class="controls">
+            <button onclick="startStream()">Start Stream</button>
+            <button onclick="stopStream()">Stop Stream</button>
+        </div>
 
-        <label for="frames">Number of Frames (1 - 5):</label>
-        <select id="frames">
-            <option value="">Select</option>
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5">5</option>
-        </select>
-        <br /><br />
+        <script>
+            let mediaStream = null;
+            let isStreaming = false;
+            const FPS = 24;
 
-        <button onclick="generate()">Generate</button>
-        <h2>Press q to end video feedback!!</h2>
+            async function startStream() {
+                try {
+                    mediaStream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            width: 480,
+                            height: 360,
+                        },
+                    });
+                    const video = document.getElementById("webcam");
+                    video.srcObject = mediaStream;
+                    isStreaming = true;
+                    streamFrames();
+                } catch (err) {
+                    console.error("Error accessing webcam:", err);
+                }
+            }
+
+            function stopStream() {
+                if (mediaStream) {
+                    mediaStream.getTracks().forEach((track) => track.stop());
+                    document.getElementById("webcam").srcObject = null;
+                    document.getElementById("processedFeed").src = "";
+                }
+                isStreaming = false;
+                fetch("/stop_stream", { method: "POST" })
+                    .then((response) => response.json())
+                    .then((data) => console.log("Stream stopped:", data))
+                    .catch((error) => console.error("Error:", error));
+            }
+
+            async function streamFrames() {
+                const video = document.getElementById("webcam");
+                const canvas = document.createElement("canvas");
+                const context = canvas.getContext("2d");
+                canvas.width = 480;
+                canvas.height = 360;
+
+                while (isStreaming) {
+                    // Draw video frame to canvas
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                    // Convert to blob and send to server
+                    const blob = await new Promise((resolve) =>
+                        canvas.toBlob(resolve, "image/jpeg")
+                    );
+                    const formData = new FormData();
+                    formData.append("frame", blob);
+
+                    try {
+                        const response = await fetch("/process_frame", {
+                            method: "POST",
+                            body: formData,
+                        });
+
+                        if (response.ok) {
+                            const processedImageBlob = await response.blob();
+                            document.getElementById("processedFeed").src =
+                                URL.createObjectURL(processedImageBlob);
+                        }
+                    } catch (error) {
+                        console.error("Error sending frame:", error);
+                    }
+
+                    // Wait to maintain desired FPS
+                    await new Promise((resolve) =>
+                        setTimeout(resolve, 1000 / FPS)
+                    );
+                }
+            }
+        </script>
     </body>
 </html>

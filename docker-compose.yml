@@ -9,7 +9,7 @@ services:
             - NVIDIA_VISIBLE_DEVICES=all # Make all GPUs visible
             - NVIDIA_DRIVER_CAPABILITIES=all # Enable all NVIDIA driver capabilities
         volumes:
-            - ../:/app
+            - ./:/app
         network_mode: "host"
         restart: unless-stopped
         deploy:

@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/pytorch:25.03-py3-igpu
+FROM nvcr.io/nvidia/pytorch:25.03-py3
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -7,16 +7,14 @@ RUN apt-get update && \
 
 RUN apt upgrade --no-install-recommends -y openssl tar
 
-RUN apt install ffmpeg
+# RUN apt install ffmpeg
 
 # Create working directory
 WORKDIR /app
 
 # install opencv with CUDA support
-COPY ./build_opencv.sh .
+COPY ./docker/build_opencv.sh .
 RUN bash ./build_opencv.sh
 
-COPY ../requirements.txt .
+COPY ./requirements.txt .
 RUN pip install -r requirements.txt
-
-COPY . .

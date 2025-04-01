@@ -19,8 +19,8 @@ echo "** Install requirement (1/4)"
 echo "------------------------------------"
 apt-get update
 apt-get install -y build-essential cmake git libgtk2.0-dev pkg-config libavcodec-dev libavformat-dev libswscale-dev
-apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev python3.10-dev python3-numpy
-apt-get install -y libtbb2 libtbb-dev libjpeg-dev libpng-dev libtiff-dev libv4l-dev v4l-utils qv4l2
+apt-get install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev python3.12-dev python3-numpy
+apt-get install -y libtbbmalloc2 libtbb-dev libjpeg-dev libpng-dev libtiff-dev libv4l-dev v4l-utils qv4l2
 apt-get install -y curl
 
 echo "------------------------------------"
@@ -48,7 +48,7 @@ echo "** Install opencv "${version}" (4/4)"
 echo "------------------------------------"
 make install
 echo 'export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH' >>~/.bashrc
-echo 'export PYTHONPATH=/usr/local/lib/python3.10/dist-packages:$PYTHONPATH' >>~/.bashrc
+echo 'export PYTHONPATH=/usr/local/lib/python3.12/dist-packages:$PYTHONPATH' >>~/.bashrc
 source ~/.bashrc
 
 echo "** Install opencv "${version}" successfully"

@@ -77,8 +77,40 @@ depth_model_url = "https://huggingface.co/julienkay/sentis-MiDaS/blob/main/onnx/
 depth_model_path = "midas.onnx"
 
 
-# Function to generate video feedback using user specified resolution and fps
-def generate(N, foreground, background, camera_index=0):
+def process_frame(
+    frame,
+    depth_session,
+    style_transfer_model_1,
+    style_transfer_model_2,
+    foreground,
+    background,
+):
+    """Process a single frame without temporal smoothing"""
+    h, w, _ = frame.shape
+    depth_map = get_depth_map(frame, depth_session, h, w)
+
+    close_mask = depth_map >= 127
+    far_mask = depth_map < 127
+
+    if foreground == "high":
+        stylized_output_close = high_apply_artsyle(frame, h, w, style_transfer_model_1)
+    else:
+        stylized_output_close = low_apply_artsyle(frame, h, w, style_transfer_model_1)
+
+    if background == "high":
+        stylized_output_far = high_apply_artsyle(frame, h, w, style_transfer_model_2)
+    else:
+        stylized_output_far = low_apply_artsyle(frame, h, w, style_transfer_model_2)
+
+    final_output = np.zeros_like(frame)
+    final_output[close_mask] = stylized_output_close[close_mask]
+    final_output[far_mask] = stylized_output_far[far_mask]
+
+    return final_output
+
+
+def get_models(providers=None):
+    """Initialize and return the models"""
     # Download NST models if not already present
     for url, path in [
         (style_model_url_1, style_model_path_1),
@@ -100,18 +132,28 @@ def generate(N, foreground, background, camera_index=0):
         style_transfer_model_2.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
         style_transfer_model_2.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
 
-        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        if providers is None:
+            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
 
     elif ort.get_device() == "ROCM":
         print("CUDA not available, but ROCm (AMD GPU) is available.")
-        providers = ["ROCMExecutionProvider", "CPUExecutionProvider"]
+        if providers is None:
+            providers = ["ROCMExecutionProvider", "CPUExecutionProvider"]
 
     else:
         print("No GPU acceleration available. Running on CPU.")
-        providers = ["CPUExecutionProvider"]
+        if providers is None:
+            providers = ["CPUExecutionProvider"]
 
-    # Load the MiDaS depth estimation model using ONNX Runtime
+    # Load the MiDaS depth estimation model
     depth_session = ort.InferenceSession(depth_model_path, providers=providers)
+
+    return style_transfer_model_1, style_transfer_model_2, depth_session
+
+
+# Function to generate video feedback using user specified resolution and fps
+def generate(N, foreground, background, camera_index=0):
+    style_transfer_model_1, style_transfer_model_2, depth_session = get_models()
 
     # Try to access webcam with the provided index
     cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)  # Explicitly use DirectShow
@@ -164,7 +206,7 @@ def generate(N, foreground, background, camera_index=0):
             continue
 
         start_time = cv2.getTickCount()
-        process_image(
+        processed = process_image(
             frame,
             depth_session,
             style_transfer_model_1,
@@ -179,7 +221,11 @@ def generate(N, foreground, background, camera_index=0):
         print(f"Frame processing time: {1000 / fps:.2f}ms")
 
         prev_frame = frame.copy()
-        prev_stylized = frame.copy()  # This will be updated in process_image
+        prev_stylized = processed.copy()
+
+        # Display side by side
+        combined = np.hstack((frame, processed))
+        cv2.imshow("Original vs Processed", combined)
 
         if cv2.waitKey(1) & 0xFF == ord("q"):  # Press "q" to exit video
             break
