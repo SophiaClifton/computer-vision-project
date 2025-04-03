@@ -33,7 +33,19 @@ pip install -r requirements.txt
 
 ### Running Tests  
 ```sh
-python3 test.py
+cd demo
+python3 demo.py N forground_res background_res
+
+or 
+
+python3 demo.py N forground_res background_res camera
+
+N: FPS processed
+forground_res: resolution of forground (high or low)
+background_res: resolution of background (high or low)
+camera: specify recording device
+
+example: python3 demo.py 3 high low
 ```
 
 ### Running the Demo  
