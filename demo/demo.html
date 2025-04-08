@@ -56,6 +56,13 @@
                     Stop Stream
                 </button>
             </div>
+
+            <div class="flex justify-center gap-3 my-4">
+                <label class="text-gray-200">
+                    <input type="checkbox" id="depthOnly" class="mr-2" /> Depth
+                    Map Only
+                </label>
+            </div>
         </div>
 
         <script>
@@ -76,7 +83,11 @@
                     video.srcObject = mediaStream;
 
                     // Start the server-side stream using multipart/x-mixed-replace
-                    document.querySelector("#processedFeed").src = "/stream";
+                    const depthOnly =
+                        document.querySelector("#depthOnly").checked;
+                    document.querySelector(
+                        "#processedFeed"
+                    ).src = `/stream?depth_only=${depthOnly}`;
 
                     // Start sending frames to the server
                     isStreaming = true;
@@ -163,6 +174,15 @@
                     console.error("Error preparing or uploading frame:", error);
                 }
             }
+
+            document
+                .querySelector("#depthOnly")
+                .addEventListener("change", () => {
+                    stopStream();
+                    startStream();
+                });
+
+            window.addEventListener("beforeunload", stopStream);
         </script>
     </body>
 </html>

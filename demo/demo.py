@@ -125,6 +125,7 @@ def process_frame(
     style_transfer_model_2,
     foreground,
     background,
+    depth_only=False,  # Add new parameter
 ):
     """Process a single frame without temporal smoothing"""
     # Start timer for performance measurement
@@ -132,6 +133,12 @@ def process_frame(
 
     h, w, _ = frame.shape
     depth_map = get_depth_map(frame, depth_session, h, w)
+
+    if depth_only:
+        end_time = cv2.getTickCount()
+        total_time = (end_time - start_time) / cv2.getTickFrequency() * 1000
+        print(f"Depth map extraction time: {total_time:.2f}ms")
+        return depth_map
 
     close_mask = depth_map >= 127
     far_mask = depth_map < 127
@@ -242,7 +249,7 @@ def get_models(providers=None):
 
 
 # Function to generate video feedback using user specified resolution and fps
-def generate(N, foreground, background, camera_index=0):
+def generate(N, foreground, background, camera_index=0, depth_only=False):
     style_transfer_model_1, style_transfer_model_2, depth_session = get_models()
 
     # Try to access webcam with the provided index
@@ -296,15 +303,14 @@ def generate(N, foreground, background, camera_index=0):
             continue
 
         start_time = cv2.getTickCount()
-        processed = process_image(
+        processed = process_frame(
             frame,
             depth_session,
             style_transfer_model_1,
             style_transfer_model_2,
             foreground,
             background,
-            prev_frame,
-            prev_stylized,
+            depth_only=depth_only,
         )
         end_time = cv2.getTickCount()
         fps = cv2.getTickFrequency() / (end_time - start_time)
@@ -427,11 +433,11 @@ if __name__ == "__main__":
         help="Quality for background style transfer",
     )
     parser.add_argument("--camera", type=int, default=0, help="Camera index to use")
+    parser.add_argument(
+        "--depth-only", action="store_true", help="Show only depth map visualization"
+    )
 
     args = parser.parse_args()
 
-    # Check if arguments are provided via sys.argv (old method) or use parser results
-    if len(sys.argv) > 1 and "--camera" not in sys.argv:
-        generate(int(sys.argv[1]), sys.argv[2], sys.argv[3])
-    else:
-        generate(args.N, args.foreground, args.background, args.camera)
+    # Run with parsed arguments
+    generate(args.N, args.foreground, args.background, args.camera, args.depth_only)

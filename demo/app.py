@@ -48,7 +48,7 @@ def upload_frame():
     return jsonify({"status": "success"})
 
 
-def process_frames_thread():
+def process_frames_thread(depth_only=False):
     global streaming_active
 
     while streaming_active:
@@ -58,7 +58,13 @@ def process_frames_thread():
             # Process the frame
             try:
                 processed = demo.process_frame(
-                    frame, depth_session, style_model_1, style_model_2, "high", "high"
+                    frame,
+                    depth_session,
+                    style_model_1,
+                    style_model_2,
+                    "high",
+                    "high",
+                    depth_only=depth_only,
                 )
 
                 if not processed_frames.full():
@@ -95,11 +101,15 @@ def generate_processed_frames():
 def stream():
     global streaming_active, processing_thread
 
+    # Get depth_only parameter from query string
+    depth_only = request.args.get("depth_only", "false").lower() == "true"
     streaming_active = True
 
     # Start processing thread if not already running
     if processing_thread is None or not processing_thread.is_alive():
-        processing_thread = threading.Thread(target=process_frames_thread)
+        processing_thread = threading.Thread(
+            target=process_frames_thread, args=(depth_only,)
+        )
         processing_thread.daemon = True
         processing_thread.start()
 
@@ -124,7 +134,7 @@ def stop_stream():
 
     # Wait for processing thread to end
     if processing_thread and processing_thread.is_alive():
-        processing_thread.join(timeout=1.0)
+        processing_thread.join(timeout=0)
 
     return jsonify({"status": "stopped"})
 
