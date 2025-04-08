@@ -68,11 +68,50 @@
         <script>
             let mediaStream = null;
             let isStreaming = false;
-            let uploadInterval = null;
+            let ws = null;
+            let sendInterval = null;
             const FPS = 30;
+            const WS_URL = "wss://5000.neilf.dev/ws";
+
+            function initWebSocket() {
+                if (ws && ws.readyState === WebSocket.OPEN) return;
+
+                ws = new WebSocket(WS_URL);
+
+                ws.onopen = () => {
+                    console.log("Connected to server");
+                };
+
+                ws.onclose = () => {
+                    console.log("Disconnected from server");
+                    stopStream();
+                };
+
+                ws.onmessage = (event) => {
+                    const message = JSON.parse(event.data);
+                    switch (message.type) {
+                        case "frame":
+                            document.getElementById("processedFeed").src =
+                                message.data;
+                            break;
+                        case "started":
+                            console.log("Stream started");
+                            break;
+                        case "stopped":
+                            console.log("Stream stopped");
+                            break;
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    console.error("WebSocket error:", error);
+                    stopStream();
+                };
+            }
 
             async function startStream() {
                 try {
+                    initWebSocket();
                     mediaStream = await navigator.mediaDevices.getUserMedia({
                         video: {
                             width: 480,
@@ -82,18 +121,18 @@
                     const video = document.querySelector("#webcam");
                     video.srcObject = mediaStream;
 
-                    // Start the server-side stream using multipart/x-mixed-replace
-                    const depthOnly =
-                        document.querySelector("#depthOnly").checked;
-                    document.querySelector(
-                        "#processedFeed"
-                    ).src = `/stream?depth_only=${depthOnly}`;
-
                     // Start sending frames to the server
                     isStreaming = true;
-                    uploadInterval = setInterval(uploadFrame, 1000 / FPS);
+                    ws.send(
+                        JSON.stringify({
+                            type: "start",
+                            depth_only:
+                                document.querySelector("#depthOnly").checked,
+                        })
+                    );
+                    sendInterval = setInterval(sendFrame, 1000 / FPS);
 
-                    // Add min-height class to containers
+                    // Remove min-height class from containers
                     const containers = document.querySelectorAll(
                         ".video-container, .image-container"
                     );
@@ -105,36 +144,29 @@
                 }
             }
 
-            async function stopStream() {
+            function stopStream() {
                 // Stop sending frames
                 isStreaming = false;
-                if (uploadInterval) {
-                    clearInterval(uploadInterval);
-                    uploadInterval = null;
+                if (sendInterval) {
+                    clearInterval(sendInterval);
+                    sendInterval = null;
                 }
 
                 // Stop the webcam
                 if (mediaStream) {
-                    for (const track of mediaStream.getTracks()) {
-                        track.stop();
-                    }
+                    mediaStream.getTracks().forEach((track) => track.stop());
                     document.querySelector("#webcam").srcObject = null;
                 }
 
+                // Clear the processed feed
                 document.querySelector("#processedFeed").src = "";
 
                 // Notify server
-                try {
-                    const response = await fetch("/stop_stream", {
-                        method: "POST",
-                    });
-                    const data = await response.json();
-                    console.log("Stream stopped:", data);
-                } catch (error) {
-                    console.error("Error stopping stream:", error);
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: "stop" }));
                 }
 
-                // Remove min-height class from containers
+                // Add min-height class to containers
                 const containers = document.querySelectorAll(
                     ".video-container, .image-container"
                 );
@@ -143,8 +175,9 @@
                 }
             }
 
-            async function uploadFrame() {
-                if (!isStreaming) return;
+            async function sendFrame() {
+                if (!isStreaming || !ws || ws.readyState !== WebSocket.OPEN)
+                    return;
 
                 const video = document.querySelector("#webcam");
                 if (!video.videoWidth) return; // Video not ready yet
@@ -157,29 +190,25 @@
                 // Draw video frame to canvas
                 context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                // Convert to blob and send to server
-                try {
-                    const blob = await new Promise((resolve) =>
-                        canvas.toBlob(resolve, "image/jpeg", 0.8)
-                    );
-                    const formData = new FormData();
-                    formData.append("frame", blob);
-
-                    // Using fetch without IIFE since we're already in an async function
-                    await fetch("/upload_frame", {
-                        method: "POST",
-                        body: formData,
-                    });
-                } catch (error) {
-                    console.error("Error preparing or uploading frame:", error);
-                }
+                // Convert to base64 and send to server
+                const dataURL = canvas.toDataURL("image/jpeg", 0.8);
+                ws.send(
+                    JSON.stringify({
+                        type: "frame",
+                        image: dataURL,
+                        depth_only:
+                            document.querySelector("#depthOnly").checked,
+                    })
+                );
             }
 
             document
                 .querySelector("#depthOnly")
                 .addEventListener("change", () => {
-                    stopStream();
-                    startStream();
+                    if (isStreaming) {
+                        stopStream();
+                        startStream();
+                    }
                 });
 
             window.addEventListener("beforeunload", stopStream);

@@ -1,5 +1,4 @@
 import os
-import sys
 import urllib.request
 
 import cv2
@@ -118,53 +117,6 @@ depth_model_url = "https://huggingface.co/julienkay/sentis-MiDaS/blob/main/onnx/
 depth_model_path = "midas.onnx"
 
 
-def process_frame(
-    frame,
-    depth_session,
-    style_transfer_model_1,
-    style_transfer_model_2,
-    foreground,
-    background,
-    depth_only=False,  # Add new parameter
-):
-    """Process a single frame without temporal smoothing"""
-    # Start timer for performance measurement
-    start_time = cv2.getTickCount()
-
-    h, w, _ = frame.shape
-    depth_map = get_depth_map(frame, depth_session, h, w)
-
-    if depth_only:
-        end_time = cv2.getTickCount()
-        total_time = (end_time - start_time) / cv2.getTickFrequency() * 1000
-        print(f"Depth map extraction time: {total_time:.2f}ms")
-        return depth_map
-
-    close_mask = depth_map >= 127
-    far_mask = depth_map < 127
-
-    if foreground == "high":
-        stylized_output_close = high_apply_artsyle(frame, h, w, style_transfer_model_1)
-    else:
-        stylized_output_close = low_apply_artsyle(frame, h, w, style_transfer_model_1)
-
-    if background == "high":
-        stylized_output_far = high_apply_artsyle(frame, h, w, style_transfer_model_2)
-    else:
-        stylized_output_far = low_apply_artsyle(frame, h, w, style_transfer_model_2)
-
-    final_output = np.zeros_like(frame)
-    final_output[close_mask] = stylized_output_close[close_mask]
-    final_output[far_mask] = stylized_output_far[far_mask]
-
-    # End timer and print performance info
-    end_time = cv2.getTickCount()
-    total_time = (end_time - start_time) / cv2.getTickFrequency() * 1000
-    print(f"Total frame processing time: {total_time:.2f}ms")
-
-    return final_output
-
-
 def get_models(providers=None):
     """Initialize and return the models"""
     # Download NST models if not already present
@@ -248,11 +200,8 @@ def get_models(providers=None):
     return style_transfer_model_1, style_transfer_model_2, depth_session
 
 
-# Function to generate video feedback using user specified resolution and fps
-def generate(N, foreground, background, camera_index=0, depth_only=False):
-    style_transfer_model_1, style_transfer_model_2, depth_session = get_models()
-
-    # Try to access webcam with the provided index
+def setup_camera(camera_index):
+    """Initialize and set up the camera"""
     cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)  # Explicitly use DirectShow
 
     if not cap.isOpened():
@@ -269,7 +218,7 @@ def generate(N, foreground, background, camera_index=0, depth_only=False):
 
     if not cap.isOpened():
         print("Error: Could not open any webcam.")
-        return
+        return None
 
     # Check if camera is actually providing frames
     ret, test_frame = cap.read()
@@ -278,7 +227,7 @@ def generate(N, foreground, background, camera_index=0, depth_only=False):
             "Error: Camera opened but not providing frames. Try another camera index."
         )
         cap.release()
-        return
+        return None
 
     # Get webcam properties
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -286,9 +235,18 @@ def generate(N, foreground, background, camera_index=0, depth_only=False):
     fps = cap.get(cv2.CAP_PROP_FPS)
     print(f"Webcam resolution: {frame_width}x{frame_height}, FPS: {fps}")
 
-    frame_count = 0
+    return cap
 
-    # Initialize previous frame variables for temporal smoothing
+
+def generate(N, foreground, background, camera_index=0, depth_only=False):
+    """Generate processed video stream with style transfer and/or depth visualization"""
+    style_transfer_model_1, style_transfer_model_2, depth_session = get_models()
+    cap = setup_camera(camera_index)
+
+    if cap is None:
+        return
+
+    frame_count = 0
     prev_frame = None
     prev_stylized = None
 
@@ -303,21 +261,32 @@ def generate(N, foreground, background, camera_index=0, depth_only=False):
             continue
 
         start_time = cv2.getTickCount()
-        processed = process_frame(
-            frame,
-            depth_session,
-            style_transfer_model_1,
-            style_transfer_model_2,
-            foreground,
-            background,
-            depth_only=depth_only,
-        )
+
+        if depth_only:
+            # Get depth map and apply colormap
+            h, w, _ = frame.shape
+            depth_map = get_depth_map(frame, depth_session, h, w)
+            processed = cv2.applyColorMap(depth_map, cv2.COLORMAP_INFERNO)
+        else:
+            # Process frame with style transfer
+            processed = process_image(
+                frame,
+                depth_session,
+                style_transfer_model_1,
+                style_transfer_model_2,
+                foreground,
+                background,
+                prev_frame,
+                prev_stylized,
+            )
+
         end_time = cv2.getTickCount()
         fps = cv2.getTickFrequency() / (end_time - start_time)
         print(f"Frame processing time: {1000 / fps:.2f}ms")
 
-        prev_frame = frame.copy()
-        prev_stylized = processed.copy()
+        if not depth_only:
+            prev_frame = frame.copy()
+            prev_stylized = processed.copy()
 
         # Display side by side
         combined = np.hstack((frame, processed))
@@ -330,7 +299,6 @@ def generate(N, foreground, background, camera_index=0, depth_only=False):
     cv2.destroyAllWindows()
 
 
-# Function to process a single image/frame
 def process_image(
     frame,
     depth_session,
@@ -397,12 +365,6 @@ def process_image(
         # Blend current output with warped previous output for temporal smoothing
         final_output = cv2.addWeighted(final_output, 1 - 0.3, warped_prev, 0.3, 0)
 
-    # Update prev_stylized reference (for the calling function)
-    if prev_stylized is not None:
-        prev_stylized[:] = final_output
-
-    # Display the final output
-    cv2.imshow("Artistic Depth Feedback", final_output)
     return final_output
 
 
