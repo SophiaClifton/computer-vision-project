@@ -11,6 +11,10 @@ services:
         volumes:
             - ./:/app
         network_mode: "host"
+        ipc: host # Add host IPC mode for shared memory
+        ulimits: # Add ulimits for PyTorch
+            memlock: -1
+            stack: 67108864
         restart: unless-stopped
         deploy:
             resources:
@@ -22,4 +26,3 @@ services:
         # Keep the container running with an interactive command
         tty: true
         stdin_open: true
-        command: /bin/bash

@@ -18,3 +18,5 @@ RUN bash ./build_opencv.sh
 
 COPY ./requirements.txt .
 RUN pip install -r requirements.txt
+
+CMD python demo/app.py
