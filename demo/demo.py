@@ -19,61 +19,46 @@ print(f"Available providers: {ort.get_available_providers()}")
 print(f"Current device: {ort.get_device()}")
 
 
-# Function to apply artistic style to close/far objects ensuring high resolution
-def high_apply_artsyle(frame, h, w, style_transfer_model):
+# Function to apply artistic style to objects with configurable resolution
+def apply_artstyle(frame, h, w, style_transfer_model, high_res=True):
     # Start timer for performance measurement
     start_time = cv2.getTickCount()
 
+    if high_res:
+        target_h, target_w = h, w
+        input_frame = frame
+    else:
+        target_h, target_w = h // 2, w // 2
+        input_frame = cv2.resize(frame, (target_w, target_h))
+
     inp = cv2.dnn.blobFromImage(
-        frame, 1.0, (w, h), (103.939, 116.779, 123.680), swapRB=False, crop=False
-    )
-    style_transfer_model.setInput(inp)
-    stylized_output = style_transfer_model.forward()
-    stylized_output = stylized_output.reshape(3, h, w)
-    stylized_output[0] += 103.939
-    stylized_output[1] += 116.779
-    stylized_output[2] += 123.680
-    stylized_output = stylized_output.transpose(1, 2, 0)
-    stylized_output = np.clip(stylized_output, 0, 255).astype(np.uint8)
-
-    # End timer and print performance info
-    end_time = cv2.getTickCount()
-    process_time = (end_time - start_time) / cv2.getTickFrequency() * 1000
-    print(f"High-res style transfer time: {process_time:.2f}ms")
-
-    return stylized_output
-
-
-# Function to apply artistic style to close/far objects and resizes frame for faster computation
-def low_apply_artsyle(frame, h, w, style_transfer_model):
-    # Start timer for performance measurement
-    start_time = cv2.getTickCount()
-
-    small_frame = cv2.resize(frame, (w // 2, h // 2))
-    inp = cv2.dnn.blobFromImage(
-        small_frame,
+        input_frame,
         1.0,
-        (w // 2, h // 2),
+        (target_w, target_h),
         (103.939, 116.779, 123.680),
         swapRB=False,
         crop=False,
     )
     style_transfer_model.setInput(inp)
     stylized_output = style_transfer_model.forward()
-    stylized_output = stylized_output.reshape(3, h // 2, w // 2)
+    stylized_output = stylized_output.reshape(3, target_h, target_w)
     stylized_output[0] += 103.939
     stylized_output[1] += 116.779
     stylized_output[2] += 123.680
     stylized_output = stylized_output.transpose(1, 2, 0)
     stylized_output = np.clip(stylized_output, 0, 255).astype(np.uint8)
-    result = cv2.resize(stylized_output, (w, h))
+
+    if not high_res:
+        stylized_output = cv2.resize(stylized_output, (w, h))
 
     # End timer and print performance info
     end_time = cv2.getTickCount()
     process_time = (end_time - start_time) / cv2.getTickFrequency() * 1000
-    print(f"Low-res style transfer time: {process_time:.2f}ms")
+    print(
+        f"{'High' if high_res else 'Low'}-res style transfer time: {process_time:.2f}ms"
+    )
 
-    return result
+    return stylized_output
 
 
 # Function to handle depth map extraction
@@ -207,19 +192,17 @@ def process_image(
 
     # Create masks for close and far regions
     close_mask = depth_map >= 127  # Closer objects have higher depth values
-    far_mask = depth_map < 127  # Farther objects have lower depth values
-
-    # Apply style transfer for close objects using 1st style model
-    if foreground == "high":
-        stylized_output_close = high_apply_artsyle(frame, h, w, style_transfer_model_1)
-    else:
-        stylized_output_close = low_apply_artsyle(frame, h, w, style_transfer_model_1)
+    far_mask = (
+        depth_map < 127
+    )  # Farther objects have lower depth values    # Apply style transfer for close objects using 1st style model
+    stylized_output_close = apply_artstyle(
+        frame, h, w, style_transfer_model_1, high_res=(foreground == "high")
+    )
 
     # Apply style transfer for far objects using 2nd style model
-    if background == "high":
-        stylized_output_far = high_apply_artsyle(frame, h, w, style_transfer_model_2)
-    else:
-        stylized_output_far = low_apply_artsyle(frame, h, w, style_transfer_model_2)
+    stylized_output_far = apply_artstyle(
+        frame, h, w, style_transfer_model_2, high_res=(background == "high")
+    )
 
     # Blend the results based on depth regions
     final_output = np.zeros_like(frame)

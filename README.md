@@ -52,7 +52,7 @@ Open **localhost** link in terminal to open demo page on browser.
 
 ---
 
-### Running with Docker
+### Running demo with Docker
 
 ## Prerequisites
 

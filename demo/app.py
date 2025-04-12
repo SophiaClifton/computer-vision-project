@@ -14,8 +14,8 @@ app = Flask(__name__, static_folder=".", static_url_path="")
 style_model_1, style_model_2, depth_session = demo.get_models()
 
 # Global variables for streaming
-frame_queue = queue.Queue(maxsize=30)
-processed_frames = queue.Queue(maxsize=30)
+frame_queue = queue.Queue(maxsize=10)
+processed_frames = queue.Queue(maxsize=10)
 streaming_active = False
 processing_thread = None
 
@@ -84,7 +84,7 @@ def process_frames_thread(depth_only=False):
                         prev_frames.get(client_id),
                         prev_stylized.get(client_id),
                     )
-                    # Store frames for next iteration
+                    # # Store frames for next iteration
                     prev_frames[client_id] = frame.copy()
                     prev_stylized[client_id] = processed.copy()
 

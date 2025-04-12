@@ -1,6 +1,6 @@
 #!/bin/bash
 
-docker compose kill
-docker compose down
+trap 'docker compose kill; docker compose down' INT
+
 docker compose up -d
 docker compose logs -f
