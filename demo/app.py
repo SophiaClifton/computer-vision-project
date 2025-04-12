@@ -19,6 +19,10 @@ processed_frames = queue.Queue(maxsize=30)
 streaming_active = False
 processing_thread = None
 
+# Store previous frames for temporal smoothing
+prev_frames = {}
+prev_stylized = {}
+
 
 @app.route("/")
 def index():
@@ -48,8 +52,18 @@ def upload_frame():
     return jsonify({"status": "success"})
 
 
+def process_frame_with_depth_only(frame, depth_session):
+    """Handle depth-only processing mode"""
+    h, w, _ = frame.shape
+    depth_map = demo.get_depth_map(frame, depth_session, h, w)
+    return cv2.applyColorMap(depth_map, cv2.COLORMAP_INFERNO)
+
+
 def process_frames_thread(depth_only=False):
     global streaming_active
+
+    # Use thread ID as client ID for temporal smoothing
+    client_id = threading.get_ident()
 
     while streaming_active:
         if not frame_queue.empty():
@@ -57,15 +71,22 @@ def process_frames_thread(depth_only=False):
 
             # Process the frame
             try:
-                processed = demo.process_frame(
-                    frame,
-                    depth_session,
-                    style_model_1,
-                    style_model_2,
-                    "high",
-                    "high",
-                    depth_only=depth_only,
-                )
+                if depth_only:
+                    processed = process_frame_with_depth_only(frame, depth_session)
+                else:
+                    processed = demo.process_image(
+                        frame,
+                        depth_session,
+                        style_model_1,
+                        style_model_2,
+                        "high",
+                        "high",
+                        prev_frames.get(client_id),
+                        prev_stylized.get(client_id),
+                    )
+                    # Store frames for next iteration
+                    prev_frames[client_id] = frame.copy()
+                    prev_stylized[client_id] = processed.copy()
 
                 if not processed_frames.full():
                     processed_frames.put(processed)
@@ -131,6 +152,12 @@ def stop_stream():
         frame_queue.get()
     while not processed_frames.empty():
         processed_frames.get()
+
+    # Clean up temporal smoothing data
+    if processing_thread:
+        client_id = processing_thread.ident
+        prev_frames.pop(client_id, None)
+        prev_stylized.pop(client_id, None)
 
     # Wait for processing thread to end
     if processing_thread and processing_thread.is_alive():

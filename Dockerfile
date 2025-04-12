@@ -7,12 +7,10 @@ RUN apt-get update && \
 
 RUN apt upgrade --no-install-recommends -y openssl tar
 
-# RUN apt install ffmpeg
-
 # Create working directory
 WORKDIR /app
 
-# install opencv with CUDA support
+# build opencv with CUDA support
 COPY ./docker/build_opencv.sh .
 RUN bash ./build_opencv.sh
 

@@ -1,5 +1,4 @@
 import os
-import sys
 import urllib.request
 
 import cv2
@@ -18,10 +17,6 @@ if cv2.cuda.getCudaEnabledDeviceCount() > 0:
 print(f"ONNXRuntime version: {ort.__version__}")
 print(f"Available providers: {ort.get_available_providers()}")
 print(f"Current device: {ort.get_device()}")
-
-# Adjust N for better video feedback:
-# - A higher N at high resolution improves speedy playback significantly.
-# - A higher N at low resolution has minimal impact.
 
 
 # Function to apply artistic style to close/far objects ensuring high resolution
@@ -118,54 +113,6 @@ depth_model_url = "https://huggingface.co/julienkay/sentis-MiDaS/blob/main/onnx/
 depth_model_path = "midas.onnx"
 
 
-def process_frame(
-    frame,
-    depth_session,
-    style_transfer_model_1,
-    style_transfer_model_2,
-    foreground,
-    background,
-    depth_only=False,  # Add new parameter
-):
-    """Process a single frame without temporal smoothing"""
-    # Start timer for performance measurement
-    start_time = cv2.getTickCount()
-
-    h, w, _ = frame.shape
-    depth_map = get_depth_map(frame, depth_session, h, w)
-
-    if depth_only:
-        end_time = cv2.getTickCount()
-        total_time = (end_time - start_time) / cv2.getTickFrequency() * 1000
-        print(f"Depth map extraction time: {total_time:.2f}ms")
-        depth_colored = cv2.applyColorMap(depth_map, cv2.COLORMAP_INFERNO)
-        return depth_colored
-
-    close_mask = depth_map >= 127
-    far_mask = depth_map < 127
-
-    if foreground == "high":
-        stylized_output_close = high_apply_artsyle(frame, h, w, style_transfer_model_1)
-    else:
-        stylized_output_close = low_apply_artsyle(frame, h, w, style_transfer_model_1)
-
-    if background == "high":
-        stylized_output_far = high_apply_artsyle(frame, h, w, style_transfer_model_2)
-    else:
-        stylized_output_far = low_apply_artsyle(frame, h, w, style_transfer_model_2)
-
-    final_output = np.zeros_like(frame)
-    final_output[close_mask] = stylized_output_close[close_mask]
-    final_output[far_mask] = stylized_output_far[far_mask]
-
-    # End timer and print performance info
-    end_time = cv2.getTickCount()
-    total_time = (end_time - start_time) / cv2.getTickFrequency() * 1000
-    print(f"Total frame processing time: {total_time:.2f}ms")
-
-    return final_output
-
-
 def get_models(providers=None):
     """Initialize and return the models"""
     # Download NST models if not already present
@@ -240,98 +187,9 @@ def get_models(providers=None):
             depth_model_path, providers=["CPUExecutionProvider"]
         )
 
-    # Run a test inference to warm up models and check performance
-    print("Warming up models with test inference...")
-    test_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-    _ = get_depth_map(test_frame, depth_session, 480, 640)
-    _ = high_apply_artsyle(test_frame, 480, 640, style_transfer_model_1)
-
     return style_transfer_model_1, style_transfer_model_2, depth_session
 
 
-# Function to generate video feedback using user specified resolution and fps
-def generate(N, foreground, background, camera_index=0, depth_only=False):
-    style_transfer_model_1, style_transfer_model_2, depth_session = get_models()
-
-    # Try to access webcam with the provided index
-    cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)  # Explicitly use DirectShow
-
-    if not cap.isOpened():
-        print(f"Could not open webcam with index {camera_index}.")
-        # Try a few alternative indices
-        for alt_index in [0, 1, 2]:
-            if alt_index == camera_index:
-                continue
-            print(f"Trying camera index {alt_index}...")
-            cap = cv2.VideoCapture(alt_index, cv2.CAP_DSHOW)
-            if cap.isOpened():
-                print(f"Successfully opened camera with index {alt_index}")
-                break
-
-    if not cap.isOpened():
-        print("Error: Could not open any webcam.")
-        return
-
-    # Check if camera is actually providing frames
-    ret, test_frame = cap.read()
-    if not ret or test_frame is None:
-        print(
-            "Error: Camera opened but not providing frames. Try another camera index."
-        )
-        cap.release()
-        return
-
-    # Get webcam properties
-    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    print(f"Webcam resolution: {frame_width}x{frame_height}, FPS: {fps}")
-
-    frame_count = 0
-
-    # Initialize previous frame variables for temporal smoothing
-    prev_frame = None
-    prev_stylized = None
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            print("Error: Couldn't read frame.")
-            break
-
-        frame_count += 1
-        if frame_count % N != 0:  # Skip N-1 frames for performance
-            continue
-
-        start_time = cv2.getTickCount()
-        processed = process_frame(
-            frame,
-            depth_session,
-            style_transfer_model_1,
-            style_transfer_model_2,
-            foreground,
-            background,
-            depth_only=depth_only,
-        )
-        end_time = cv2.getTickCount()
-        fps = cv2.getTickFrequency() / (end_time - start_time)
-        print(f"Frame processing time: {1000 / fps:.2f}ms")
-
-        prev_frame = frame.copy()
-        prev_stylized = processed.copy()
-
-        # Display side by side
-        combined = np.hstack((frame, processed))
-        cv2.imshow("Original vs Processed", combined)
-
-        if cv2.waitKey(1) & 0xFF == ord("q"):  # Press "q" to exit video
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
-
-
-# Function to process a single image/frame
 def process_image(
     frame,
     depth_session,
@@ -402,43 +260,4 @@ def process_image(
     if prev_stylized is not None:
         prev_stylized[:] = final_output
 
-    # Display the final output
-    cv2.imshow("Artistic Depth Feedback", final_output)
     return final_output
-
-
-if __name__ == "__main__":
-    # Parse command line arguments
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Artistic Style Transfer with Depth")
-    parser.add_argument(
-        "N",
-        type=int,
-        nargs="?",
-        default=5,
-        help="Frame skipping factor (higher = faster but less smooth)",
-    )
-    parser.add_argument(
-        "foreground",
-        nargs="?",
-        choices=["high", "low"],
-        default="high",
-        help="Quality for foreground style transfer",
-    )
-    parser.add_argument(
-        "background",
-        nargs="?",
-        choices=["high", "low"],
-        default="low",
-        help="Quality for background style transfer",
-    )
-    parser.add_argument("--camera", type=int, default=0, help="Camera index to use")
-    parser.add_argument(
-        "--depth-only", action="store_true", help="Show only depth map visualization"
-    )
-
-    args = parser.parse_args()
-
-    # Run with parsed arguments
-    generate(args.N, args.foreground, args.background, args.camera, args.depth_only)
