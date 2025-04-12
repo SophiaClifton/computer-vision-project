@@ -1,0 +1,28 @@
+services:
+    cuda_opencv:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        image: cuda_tensorflow_opencv:latest
+        container_name: cuda_opencv
+        environment:
+            - NVIDIA_VISIBLE_DEVICES=all # Make all GPUs visible
+            - NVIDIA_DRIVER_CAPABILITIES=all # Enable all NVIDIA driver capabilities
+        volumes:
+            - ./:/app
+        network_mode: "host"
+        ipc: host # Add host IPC mode for shared memory
+        ulimits: # Add ulimits for PyTorch
+            memlock: -1
+            stack: 67108864
+        restart: unless-stopped
+        deploy:
+            resources:
+                reservations:
+                    devices:
+                        - driver: nvidia
+                          count: all
+                          capabilities: [gpu, video, compute, utility]
+        # Keep the container running with an interactive command
+        tty: true
+        stdin_open: true

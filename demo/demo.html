@@ -4,70 +4,185 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>NST & DM Project</title>
-        <script>
-            function generate() {
-                var foregroundRes = document.getElementById("foreground").value;
-                var backgroundRes = document.getElementById("background").value;
-                var N = document.getElementById("frames").value;
+        <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+        <style>
+            .stream-container-height {
+                min-height: 360px;
+            }
+        </style>
+    </head>
+    <body class="bg-gray-900 p-4 text-gray-200">
+        <div class="max-w-6xl mx-auto">
+            <h1 class="text-3xl font-bold text-center mb-6 text-gray-100">
+                Real-time Style Transfer with Depth
+            </h1>
 
-                if (foregroundRes === "" || backgroundRes === "" || N === "") {
-                    alert("Please fill all fields.");
-                    return;
+            <div
+                class="flex flex-col md:flex-row items-center justify-center gap-4 mb-6"
+            >
+                <div
+                    class="video-container w-full bg-gray-800 rounded-lg shadow-lg p-1 flex items-center justify-center stream-container-height"
+                >
+                    <video
+                        id="webcam"
+                        autoplay
+                        playsinline
+                        class="w-full h-auto object-contain rounded-lg"
+                    ></video>
+                </div>
+                <div
+                    class="image-container w-full bg-gray-800 rounded-lg shadow-lg p-1 flex items-center justify-center stream-container-height"
+                >
+                    <img
+                        id="processedFeed"
+                        src=""
+                        alt="Processed Stream"
+                        class="w-full h-auto object-contain rounded-lg"
+                    />
+                </div>
+            </div>
+
+            <div class="flex justify-center gap-3 my-4">
+                <button
+                    onclick="startStream()"
+                    class="bg-gray-600 hover:bg-gray-500 text-white font-semibold py-2 px-6 rounded-lg shadow transition duration-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50"
+                >
+                    Start Stream
+                </button>
+                <button
+                    onclick="stopStream()"
+                    class="bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 px-6 rounded-lg shadow transition duration-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50"
+                >
+                    Stop Stream
+                </button>
+            </div>
+
+            <div class="flex justify-center gap-3 my-4">
+                <label class="text-gray-200">
+                    <input type="checkbox" id="depthOnly" class="mr-2" /> Depth
+                    Map Only
+                </label>
+            </div>
+        </div>
+
+        <script>
+            let mediaStream = null;
+            let isStreaming = false;
+            let uploadInterval = null;
+            const FPS = 10;
+
+            async function startStream() {
+                try {
+                    mediaStream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            width: 480,
+                            height: 360,
+                        },
+                    });
+                    const video = document.querySelector("#webcam");
+                    video.srcObject = mediaStream;
+
+                    // Start the server-side stream using multipart/x-mixed-replace
+                    const depthOnly =
+                        document.querySelector("#depthOnly").checked;
+                    document.querySelector(
+                        "#processedFeed"
+                    ).src = `/stream?depth_only=${depthOnly}`;
+
+                    // Start sending frames to the server
+                    isStreaming = true;
+                    uploadInterval = setInterval(uploadFrame, 1000 / FPS);
+
+                    // Add min-height class to containers
+                    const containers = document.querySelectorAll(
+                        ".video-container, .image-container"
+                    );
+                    for (const container of containers) {
+                        container.classList.remove("stream-container-height");
+                    }
+                } catch (err) {
+                    console.error("Error accessing webcam:", err);
+                }
+            }
+
+            async function stopStream() {
+                // Stop sending frames
+                isStreaming = false;
+                if (uploadInterval) {
+                    clearInterval(uploadInterval);
+                    uploadInterval = null;
                 }
 
-                // Send data to Flask server
-                fetch("/generate", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        foreground: foregroundRes,
-                        background: backgroundRes,
-                        frames: N,
-                    }),
-                })
-                    .then((response) => response.json())
-                    .then((data) => {
-                        if (data.error) {
-                            alert("Error: " + data.error);
-                        } else {
-                            alert("Output: " + data.output);
-                        }
-                    })
-                    .catch((error) => console.error("Error:", error));
+                // Stop the webcam
+                if (mediaStream) {
+                    for (const track of mediaStream.getTracks()) {
+                        track.stop();
+                    }
+                    document.querySelector("#webcam").srcObject = null;
+                }
+
+                document.querySelector("#processedFeed").src = "";
+
+                // Notify server
+                try {
+                    const response = await fetch("/stop_stream", {
+                        method: "POST",
+                    });
+                    const data = await response.json();
+                    console.log("Stream stopped:", data);
+                } catch (error) {
+                    console.error("Error stopping stream:", error);
+                }
+
+                // Remove min-height class from containers
+                const containers = document.querySelectorAll(
+                    ".video-container, .image-container"
+                );
+                for (const container of containers) {
+                    container.classList.add("stream-container-height");
+                }
             }
+
+            async function uploadFrame() {
+                if (!isStreaming) return;
+
+                const video = document.querySelector("#webcam");
+                if (!video.videoWidth) return; // Video not ready yet
+
+                const canvas = document.createElement("canvas");
+                const context = canvas.getContext("2d");
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+
+                // Draw video frame to canvas
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                // Convert to blob and send to server
+                try {
+                    const blob = await new Promise((resolve) =>
+                        canvas.toBlob(resolve, "image/jpeg", 0.8)
+                    );
+                    const formData = new FormData();
+                    formData.append("frame", blob);
+
+                    // Using fetch without IIFE since we're already in an async function
+                    await fetch("/upload_frame", {
+                        method: "POST",
+                        body: formData,
+                    });
+                } catch (error) {
+                    console.error("Error preparing or uploading frame:", error);
+                }
+            }
+
+            document
+                .querySelector("#depthOnly")
+                .addEventListener("change", () => {
+                    stopStream();
+                    startStream();
+                });
+
+            window.addEventListener("beforeunload", stopStream);
         </script>
-    </head>
-    <body>
-        <h1>NST & DM Video Feedback at Different Resolutions</h1>
-
-        <label for="foreground">Foreground Resolution:</label>
-        <select id="foreground">
-            <option value="">Select</option>
-            <option value="high">High</option>
-            <option value="low">Low</option>
-        </select>
-        <br /><br />
-
-        <label for="background">Background Resolution:</label>
-        <select id="background">
-            <option value="">Select</option>
-            <option value="high">High</option>
-            <option value="low">Low</option>
-        </select>
-        <br /><br />
-
-        <label for="frames">Number of Frames (1 - 5):</label>
-        <select id="frames">
-            <option value="">Select</option>
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5">5</option>
-        </select>
-        <br /><br />
-
-        <button onclick="generate()">Generate</button>
-        <h2>Press q to end video feedback!!</h2>
     </body>
 </html>
